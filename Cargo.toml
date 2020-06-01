@@ -1,0 +1,11 @@
+[package]
+name = "versions"
+version = "1.0.0"
+authors = ["Colin Woodbury <colin@fosskers.ca>"]
+edition = "2018"
+
+[dependencies]
+nom = "5.1"
+
+[dev-dependencies]
+version-sync = "0.9"

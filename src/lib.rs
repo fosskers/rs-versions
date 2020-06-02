@@ -80,7 +80,10 @@ pub struct SemVer {
 
 impl SemVer {
     pub fn new(s: &str) -> Option<SemVer> {
-        SemVer::parse(s).ok().map(|pair| pair.1)
+        match SemVer::parse(s) {
+            Ok(("", sv)) => Some(sv),
+            _ => None,
+        }
     }
 
     fn parse(i: &str) -> IResult<&str, SemVer> {

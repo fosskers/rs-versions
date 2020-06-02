@@ -311,14 +311,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn basic_semver() {
-        let orig = "1.2.3-r1+git";
-        let attempt = SemVer::new(orig).unwrap();
-
-        assert_eq!(orig, format!("{}", attempt));
-    }
-
-    #[test]
     fn good_semvers() {
         let goods = vec![
             "0.1.0",
@@ -350,5 +342,27 @@ mod tests {
         ];
 
         bads.iter().for_each(|s| assert_eq!(None, SemVer::new(s)));
+    }
+
+    #[test]
+    /// The exact example from http://semver.org
+    fn semver_ord() {
+        let svs = vec![
+            "1.0.0-alpha",
+            "1.0.0-alpha.1",
+            "1.0.0-alpha.beta",
+            "1.0.0-beta",
+            "1.0.0-beta.2",
+            "1.0.0-beta.11",
+            "1.0.0-rc.1",
+            "1.0.0",
+        ];
+
+        svs.iter().zip(&svs[1..]).for_each(|(a, b)| {
+            let x = SemVer::new(a);
+            let y = SemVer::new(b);
+
+            assert!(x < y);
+        });
     }
 }

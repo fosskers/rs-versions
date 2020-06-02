@@ -41,7 +41,7 @@ mod parsers;
 
 /// An (Ideal) version number that conforms to Semantic Versioning.
 ///
-/// This is a *prescriptive* parser, meaning that it follows the [SemVer
+/// This is a *prescriptive* scheme, meaning that it follows the [SemVer
 /// standard][semver].
 ///
 /// Legal semvers are of the form: MAJOR.MINOR.PATCH-PREREL+META
@@ -92,8 +92,8 @@ impl SemVer {
         let (i, minor) = parsers::unsigned(i)?;
         let (i, _) = char('.')(i)?;
         let (i, patch) = parsers::unsigned(i)?;
-        let (i, pre_rel) = opt(SemVer::pre_rel)(i)?;
-        let (i, meta) = opt(SemVer::meta)(i)?;
+        let (i, pre_rel) = opt(Chunks::pre_rel)(i)?;
+        let (i, meta) = opt(Chunks::meta)(i)?;
 
         let sv = SemVer {
             major,
@@ -104,16 +104,6 @@ impl SemVer {
         };
 
         Ok((i, sv))
-    }
-
-    fn pre_rel(i: &str) -> IResult<&str, Chunks> {
-        let (i, _) = char('-')(i)?;
-        Chunks::parse(i)
-    }
-
-    fn meta(i: &str) -> IResult<&str, Chunks> {
-        let (i, _) = char('+')(i)?;
-        Chunks::parse(i)
     }
 }
 
@@ -166,8 +156,92 @@ impl fmt::Display for SemVer {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
-pub struct Version;
+/// A (General) Version.
+///
+/// This is a *descriptive* scheme, meaning that it encapsulates the most
+/// common, unconscious patterns that developers use when assigning version
+/// numbers to their software. If not [`SemVer`](struct.SemVer.html), most
+/// version numbers found in the wild will parse as a `Version`. These generally
+/// conform to the `x.x.x-x` pattern, and may optionally have an *epoch*.
+///
+/// # Epochs
+///
+/// Epochs are prefixes marked by a colon, like in `1:2.3.4`. When comparing two
+/// `Version` values, epochs take precedent. So `2:1.0.0 > 1:9.9.9`. If one of
+/// the given `Version`s has no epoch, its epoch is assumed to be `0`.
+///
+/// # Examples
+///
+/// ```
+/// use versions::{SemVer, Version};
+///
+/// // None of these are SemVer, but can still be parsed and compared.
+/// let vers = vec!["0.25-2", "8.u51-1", "20150826-1", "1:2.3.4"];
+///
+/// for v in vers {
+///     assert!(SemVer::new(v).is_none());
+///     assert!(Version::new(v).is_some());
+/// }
+/// ```
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct Version {
+    pub epoch: Option<u32>,
+    pub chunks: Chunks,
+    pub release: Option<Chunks>,
+}
+
+impl Version {
+    pub fn new(s: &str) -> Option<Version> {
+        match Version::parse(s) {
+            Ok(("", v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    fn parse(i: &str) -> IResult<&str, Version> {
+        let (i, epoch) = opt(Version::epoch)(i)?;
+        let (i, chunks) = Chunks::parse(i)?;
+        let (i, release) = opt(Chunks::pre_rel)(i)?;
+
+        let v = Version {
+            epoch,
+            chunks,
+            release,
+        };
+
+        Ok((i, v))
+    }
+
+    fn epoch(i: &str) -> IResult<&str, u32> {
+        let (i, epoch) = parsers::unsigned(i)?;
+        let (i, _) = char(':')(i)?;
+
+        Ok((i, epoch))
+    }
+}
+
+impl PartialOrd for Version {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Version {
+    fn cmp(&self, other: &Self) -> Ordering {
+        Ordering::Equal
+    }
+}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match (&self.epoch, &self.release) {
+            (None, None) => write!(f, "{}", self.chunks),
+            (Some(e), None) => write!(f, "{}:{}", e, self.chunks),
+            (None, Some(r)) => write!(f, "{}-{}", self.chunks, r),
+            (Some(e), Some(r)) => write!(f, "{}:{}-{}", e, self.chunks, r),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub struct Mess;
@@ -261,6 +335,16 @@ impl Chunks {
     fn parse(i: &str) -> IResult<&str, Chunks> {
         let (i, cs) = separated_nonempty_list(char('.'), Chunk::parse)(i)?;
         Ok((i, Chunks(cs)))
+    }
+
+    fn pre_rel(i: &str) -> IResult<&str, Chunks> {
+        let (i, _) = char('-')(i)?;
+        Chunks::parse(i)
+    }
+
+    fn meta(i: &str) -> IResult<&str, Chunks> {
+        let (i, _) = char('+')(i)?;
+        Chunks::parse(i)
     }
 }
 
@@ -363,6 +447,32 @@ mod tests {
             let y = SemVer::new(b);
 
             assert!(x < y);
+        });
+    }
+
+    #[test]
+    fn good_versions() {
+        let goods = vec![
+            "1",
+            "1.2",
+            "1.0rc0",
+            "1.0rc1",
+            "1.1rc1",
+            "1.58.0-3",
+            "44.0.2403.157-1",
+            "0.25-2",
+            "8.u51-1",
+            "21-2",
+            "7.1p1-1",
+            "20150826-1",
+            "1:0.10.16-3",
+        ];
+
+        goods.iter().for_each(|s| {
+            assert_eq!(
+                Some(s.to_string()),
+                Version::new(s).map(|v| format!("{}", v))
+            )
         });
     }
 }

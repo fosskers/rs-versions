@@ -20,10 +20,14 @@
 
 #![doc(html_root_url = "https://docs.rs/versions/1.0.0")]
 
-use nom::character::complete::char;
+use itertools::Itertools;
+use nom::branch::alt;
+use nom::character::complete::{alpha1, char};
 use nom::combinator::opt;
+use nom::multi::{many1, separated_nonempty_list};
 use nom::IResult;
 use std::cmp::Ordering;
+use std::fmt;
 mod parsers;
 
 // TODO
@@ -42,7 +46,8 @@ mod parsers;
 ///
 /// Legal semvers are of the form: MAJOR.MINOR.PATCH-PREREL+META
 ///
-/// Example: `1.2.3-r1+commithash`
+/// - Simple Sample: `1.2.3`
+/// - Full Sample: `1.2.3-alpha.2+a1b2c3.1`
 ///
 /// # Extra Rules
 ///
@@ -55,10 +60,10 @@ mod parsers;
 /// ```
 /// use versions::SemVer;
 ///
-/// let attempt = SemVer::new("1.2.3");
-/// let expected = SemVer { major: 1, minor: 2, patch: 3, pre_rel: vec![], meta: vec![] };
+/// let orig = "1.2.3-r1+git";
+/// let attempt = SemVer::new(orig).unwrap();
 ///
-/// assert_eq!(Some(expected), attempt);
+/// assert_eq!(orig, format!("{}", attempt));
 /// ```
 ///
 /// [semver]: http://semver.org
@@ -67,8 +72,10 @@ pub struct SemVer {
     pub major: u32,
     pub minor: u32,
     pub patch: u32,
-    pub pre_rel: Chunks,
-    pub meta: Chunks,
+    /// `Some` implies that the inner `Vec` of the `Chunks` is not empty.
+    pub pre_rel: Option<Chunks>,
+    /// `Some` implies that the inner `Vec` of the `Chunks` is not empty.
+    pub meta: Option<Chunks>,
 }
 
 impl SemVer {
@@ -89,8 +96,8 @@ impl SemVer {
             major,
             minor,
             patch,
-            pre_rel: pre_rel.unwrap_or(Chunks::new()),
-            meta: meta.unwrap_or(Chunks::new()),
+            pre_rel,
+            meta,
         };
 
         Ok((i, sv))
@@ -132,12 +139,26 @@ impl Ord for SemVer {
         match a.cmp(&b) {
             Ordering::Less => Ordering::Less,
             Ordering::Greater => Ordering::Greater,
-            Ordering::Equal if self.pre_rel.0.is_empty() && other.pre_rel.0.is_empty() => {
-                Ordering::Equal
-            }
-            Ordering::Equal if self.pre_rel.0.is_empty() => Ordering::Greater,
-            Ordering::Equal if other.pre_rel.0.is_empty() => Ordering::Less,
-            Ordering::Equal => self.pre_rel.cmp(&other.pre_rel),
+            Ordering::Equal => match (&self.pre_rel, &other.pre_rel) {
+                (None, None) => Ordering::Equal,
+                (None, _) => Ordering::Greater,
+                (_, None) => Ordering::Less,
+                (Some(ap), Some(bp)) => ap.cmp(&bp),
+            },
+        }
+    }
+}
+
+impl fmt::Display for SemVer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ma = self.major;
+        let mi = self.minor;
+        let pa = self.patch;
+        match (&self.pre_rel, &self.meta) {
+            (None, None) => write!(f, "{}.{}.{}", ma, mi, pa),
+            (Some(p), None) => write!(f, "{}.{}.{}-{}", ma, mi, pa, p),
+            (None, Some(m)) => write!(f, "{}.{}.{}+{}", ma, mi, pa, m),
+            (Some(p), Some(m)) => write!(f, "{}.{}.{}-{}+{}", ma, mi, pa, p, m),
         }
     }
 }
@@ -153,12 +174,46 @@ pub struct Mess;
 /// Groups of these are called `Chunk`s, and are the identifiers separated by
 /// periods in the source.
 ///
-/// Please avoid using the `Unit::String` constructor yourself. Instead consider
-/// the [`from_string`](#method.from_string) method to verify the input.
+/// Please avoid using the `Unit::Letters` constructor yourself. Instead
+/// consider the [`from_string`](#method.from_string) method to verify the
+/// input.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub enum Unit {
     Digits(u32),
-    String(String),
+    Letters(String),
+}
+
+impl Unit {
+    // TODO This can be made simpler once `bool::then_some` is merged into
+    // stable Rust.
+    /// Smart constructor for a `Unit` made of letters.
+    pub fn from_string(s: String) -> Option<Unit> {
+        match s.chars().all(|c| c.is_ascii_alphabetic()) {
+            true => Some(Unit::Letters(s)),
+            false => None,
+        }
+    }
+
+    fn parse(i: &str) -> IResult<&str, Unit> {
+        alt((Unit::digits, Unit::string))(i)
+    }
+
+    fn digits(i: &str) -> IResult<&str, Unit> {
+        parsers::unsigned(i).map(|(i, x)| (i, Unit::Digits(x)))
+    }
+
+    fn string(i: &str) -> IResult<&str, Unit> {
+        alpha1(i).map(|(i, s)| (i, Unit::Letters(s.to_string())))
+    }
+}
+
+impl fmt::Display for Unit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Unit::Digits(ns) => write!(f, "{}", ns),
+            Unit::Letters(cs) => write!(f, "{}", cs),
+        }
+    }
 }
 
 // TODO Add more examples.
@@ -172,7 +227,7 @@ pub enum Unit {
 ///
 /// - `r3`
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
-pub struct Chunk(Vec<Unit>);
+pub struct Chunk(pub Vec<Unit>);
 
 impl Chunk {
     pub fn new() -> Chunk {
@@ -180,12 +235,20 @@ impl Chunk {
     }
 
     fn parse(i: &str) -> IResult<&str, Chunk> {
-        Ok((i, Chunk::new()))
+        many1(Unit::parse)(i).map(|(i, cs)| (i, Chunk(cs)))
     }
 }
 
+impl fmt::Display for Chunk {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s: String = self.0.iter().map(|u| format!("{}", u)).collect();
+        write!(f, "{}", s)
+    }
+}
+
+/// Multiple [`Chunk`](struct.Chunk.html) values.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
-pub struct Chunks(Vec<Chunk>);
+pub struct Chunks(pub Vec<Chunk>);
 
 impl Chunks {
     pub fn new() -> Chunks {
@@ -193,19 +256,15 @@ impl Chunks {
     }
 
     fn parse(i: &str) -> IResult<&str, Chunks> {
-        Ok((i, Chunks::new()))
+        let (i, cs) = separated_nonempty_list(char('.'), Chunk::parse)(i)?;
+        Ok((i, Chunks(cs)))
     }
 }
 
-impl Unit {
-    // TODO This can be made simpler once `bool::then_some` is merged into
-    // stable Rust.
-    /// Smart constructor for a `Unit` made of letters.
-    pub fn from_string(s: String) -> Option<Unit> {
-        match s.chars().all(|c| c.is_ascii_alphabetic()) {
-            true => Some(Unit::String(s)),
-            false => None,
-        }
+impl fmt::Display for Chunks {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s: String = self.0.iter().map(|c| format!("{}", c)).join(".");
+        write!(f, "{}", s)
     }
 }
 
@@ -250,15 +309,9 @@ mod tests {
 
     #[test]
     fn basic_semver() {
-        let attempt = SemVer::new("1.2.3-r1+git");
-        let expected = SemVer {
-            major: 1,
-            minor: 2,
-            patch: 3,
-            pre_rel: Chunks::new(),
-            meta: Chunks::new(),
-        };
+        let orig = "1.2.3-r1+git";
+        let attempt = SemVer::new(orig).unwrap();
 
-        assert_eq!(Some(expected), attempt);
+        assert_eq!(orig, format!("{}", attempt));
     }
 }

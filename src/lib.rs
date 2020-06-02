@@ -227,8 +227,19 @@ impl PartialOrd for Version {
 }
 
 impl Ord for Version {
+    /// If two epochs are equal, we need to compare their actual version
+    /// numbers. Otherwise, the comparison of the epochs is the only thing that
+    /// matters.
     fn cmp(&self, other: &Self) -> Ordering {
-        Ordering::Equal
+        let ae = self.epoch.unwrap_or(0);
+        let be = other.epoch.unwrap_or(0);
+        match ae.cmp(&be) {
+            Ordering::Equal => match self.chunks.cmp(&other.chunks) {
+                Ordering::Equal => self.release.cmp(&other.release),
+                ord => ord,
+            },
+            ord => ord,
+        }
     }
 }
 
@@ -468,11 +479,33 @@ mod tests {
             "1:0.10.16-3",
         ];
 
-        goods.iter().for_each(|s| {
+        for s in goods {
             assert_eq!(
                 Some(s.to_string()),
                 Version::new(s).map(|v| format!("{}", v))
             )
-        });
+        }
+    }
+
+    #[test]
+    fn version_ord() {
+        let vs = vec!["0.9.9.9", "1.0.0.0", "1.0.0.1", "2"];
+
+        for (a, b) in vs.iter().zip(&vs[1..]) {
+            cmp_versions(a, b);
+        }
+
+        cmp_versions("1.2-5", "1.2.3-1");
+        cmp_versions("1.0rc1", "1.0");
+        cmp_versions("1.0", "1:1.0");
+        cmp_versions("1.1", "1:1.0");
+        cmp_versions("1.1", "1:1.1");
+    }
+
+    fn cmp_versions(a: &str, b: &str) {
+        let x = Version::new(a).unwrap();
+        let y = Version::new(b).unwrap();
+
+        assert!(x < y, "{} < {}", x, y);
     }
 }

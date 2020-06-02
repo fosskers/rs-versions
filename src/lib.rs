@@ -20,6 +20,7 @@
 
 #![doc(html_root_url = "https://docs.rs/versions/1.0.0")]
 
+use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;
 use nom::branch::alt;
 use nom::character::complete::{alpha1, char};
@@ -314,7 +315,7 @@ impl fmt::Display for Unit {
 /// # Examples
 ///
 /// - `r3`
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Chunk(pub Vec<Unit>);
 
 impl Chunk {
@@ -324,6 +325,47 @@ impl Chunk {
 
     fn parse(i: &str) -> IResult<&str, Chunk> {
         many1(Unit::parse)(i).map(|(i, cs)| (i, Chunk(cs)))
+    }
+}
+impl PartialOrd for Chunk {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// A custom implementation.
+impl Ord for Chunk {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0
+            .iter()
+            .zip_longest(&other.0)
+            .filter_map(|eob| match eob {
+                // Different from the `Ord` instance of `Chunks`, if we've
+                // iterated this far and one side has fewer chunks, it must be
+                // the "greater" version. A Chunk break only occurs in a switch
+                // from digits to letters and vice versa, so anything "extra"
+                // must be an `rc` marking or similar. Consider `1.1` compared
+                // to `1.1rc1`.
+                Left(_) => Some(Ordering::Less),
+                Right(_) => Some(Ordering::Greater),
+                // The usual case where the `Unit` types match, as in `1.2.3.4`
+                // vs `1.2.4.0`.
+                Both(Unit::Digits(a), Unit::Digits(b)) => match a.cmp(b) {
+                    Ordering::Equal => None,
+                    ord => Some(ord),
+                },
+                Both(Unit::Letters(a), Unit::Letters(b)) => match a.cmp(b) {
+                    Ordering::Equal => None,
+                    ord => Some(ord),
+                },
+                // The arbitrary decision to prioritize Letters over Digits has
+                // the effect of allowing this instance to work for `SemVer` as
+                // well as `Version`.
+                Both(Unit::Digits(_), Unit::Letters(_)) => Some(Ordering::Less),
+                Both(Unit::Letters(_), Unit::Digits(_)) => Some(Ordering::Greater),
+            })
+            .next()
+            .unwrap_or(Ordering::Equal)
     }
 }
 
@@ -454,10 +496,10 @@ mod tests {
         ];
 
         svs.iter().zip(&svs[1..]).for_each(|(a, b)| {
-            let x = SemVer::new(a);
-            let y = SemVer::new(b);
+            let x = SemVer::new(a).unwrap();
+            let y = SemVer::new(b).unwrap();
 
-            assert!(x < y);
+            assert!(x < y, "{} < {}", x, y);
         });
     }
 

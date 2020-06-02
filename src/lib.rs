@@ -314,4 +314,38 @@ mod tests {
 
         assert_eq!(orig, format!("{}", attempt));
     }
+
+    #[test]
+    fn good_semvers() {
+        let goods = vec![
+            "0.1.0",
+            "1.2.3",
+            "1.2.3-1",
+            "1.2.3-alpha",
+            "1.2.3-alpha.2",
+            "1.2.3+a1b2c3.1",
+            "1.2.3-alpha.2+a1b2c3.1",
+        ];
+
+        goods.iter().for_each(|s| {
+            assert_eq!(
+                Some(s.to_string()),
+                SemVer::new(s).map(|sv| format!("{}", sv))
+            )
+        });
+    }
+
+    #[test]
+    fn bad_semvers() {
+        let bads = vec![
+            "1",
+            "1.2",
+            "1.2.3+a1b2bc3.1-alpha.2",
+            "a.b.c",
+            "1.01.1",
+            "1.2.3+a1b!2c3.1",
+        ];
+
+        bads.iter().for_each(|s| assert_eq!(None, SemVer::new(s)));
+    }
 }

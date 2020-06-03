@@ -325,6 +325,27 @@ impl Mess {
     }
 }
 
+impl PartialOrd for Mess {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// Build metadata does not affect version precendence, and pre-release versions
+/// have *lower* precedence than normal versions.
+impl Ord for Mess {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.chunk.cmp(&other.chunk) {
+            Ordering::Equal => {
+                let an = self.next.as_ref().map(|(_, m)| m);
+                let bn = other.next.as_ref().map(|(_, m)| m);
+                an.cmp(&bn)
+            }
+            ord => ord,
+        }
+    }
+}
+
 impl fmt::Display for Mess {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.pretty())
@@ -691,5 +712,29 @@ mod tests {
             assert!(vr.is_none(), "Shouldn't be Version: {} -> {:#?}", s, vr);
             assert_eq!(Some(s.to_string()), Mess::new(s).map(|v| format!("{}", v)));
         }
+    }
+
+    #[test]
+    fn mess_ord() {
+        let messes = vec![
+            "10.2+0.93+1-1",
+            "10.2+0.93+1-2",
+            "10.2+0.93+2-1",
+            "10.2+0.94+1-1",
+            "10.3+0.93+1-1",
+            "11.2+0.93+1-1",
+            "12",
+        ];
+
+        for (a, b) in messes.iter().zip(&messes[1..]) {
+            cmp_messes(a, b);
+        }
+    }
+
+    fn cmp_messes(a: &str, b: &str) {
+        let x = Mess::new(a).unwrap();
+        let y = Mess::new(b).unwrap();
+
+        assert!(x < y, "{} < {}", x, y);
     }
 }

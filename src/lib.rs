@@ -14,9 +14,10 @@
 //!
 //! # Usage
 //!
-//! If you're parsing version numbers that don't follow a single scheme (say, as
-//! in system packages), then use the [`Versioning`](enum.Versioning.html) type
-//! and its parser [`Versioning::new`](enum.Versioning.html#method.new).
+//! If you're parsing several version numbers that don't follow a single scheme
+//! (say, as in system packages), then use the
+//! [`Versioning`](enum.Versioning.html) type and its parser
+//! [`Versioning::new`](enum.Versioning.html#method.new).
 
 #![doc(html_root_url = "https://docs.rs/versions/1.0.0")]
 
@@ -83,6 +84,17 @@ impl SemVer {
     }
 
     /// Create a new [`Version`](struct.Version.html) from a `SemVer`.
+    ///
+    /// **Note:** Drops `SemVer` metadata!
+    ///
+    /// ```
+    /// use versions::SemVer;
+    ///
+    /// let orig = "1.2.3-r1+git123";
+    /// let ver = SemVer::new(orig).unwrap().to_version();
+    ///
+    /// assert_eq!("1.2.3-r1", format!("{}", ver));
+    /// ```
     pub fn to_version(&self) -> Version {
         let chunks = Chunks(vec![
             Chunk(vec![Unit::Digits(self.major)]),
@@ -98,11 +110,32 @@ impl SemVer {
     }
 
     /// Create a new [`Mess`](struct.Mess.html) from a `SemVer`.
+    ///
+    /// ```
+    /// use versions::SemVer;
+    ///
+    /// let orig = "1.2.3-r1+git123";
+    /// let mess = SemVer::new(orig).unwrap().to_mess();
+    ///
+    /// assert_eq!(orig, format!("{}", mess));
+    /// ```
     pub fn to_mess(&self) -> Mess {
-        Mess {
-            chunk: vec![],
-            next: None,
-        } // TODO
+        let chunk = vec![
+            self.major.to_string(),
+            self.minor.to_string(),
+            self.patch.to_string(),
+        ];
+        let next = self.pre_rel.as_ref().map(|pr| {
+            let chunk = pr.0.iter().map(|c| format!("{}", c)).collect();
+            let next = self.meta.as_ref().map(|meta| {
+                let chunk = meta.0.iter().map(|m| format!("{}", m)).collect();
+                (Sep::Plus, Box::new(Mess { chunk, next: None }))
+            });
+
+            (Sep::Hyphen, Box::new(Mess { chunk, next }))
+        });
+
+        Mess { chunk, next }
     }
 
     /// We try our best to analyse the `Version` as if it's a `SemVer`. If we

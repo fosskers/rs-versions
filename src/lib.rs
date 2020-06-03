@@ -23,11 +23,9 @@
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;
 use nom::branch::alt;
-use nom::character::complete::alphanumeric1;
-use nom::character::complete::{alpha1, char};
-use nom::combinator::opt;
-use nom::combinator::value;
-use nom::multi::separated_list;
+use nom::bytes::complete::tag;
+use nom::character::complete::{alpha1, alphanumeric1, char};
+use nom::combinator::{map, map_res, opt, value};
 use nom::multi::{many1, separated_nonempty_list};
 use nom::IResult;
 use std::cmp::Ordering;
@@ -292,7 +290,7 @@ impl Mess {
     }
 
     fn parse(i: &str) -> IResult<&str, Mess> {
-        let (i, cs) = separated_list(char('.'), alphanumeric1)(i)?;
+        let (i, cs) = separated_nonempty_list(char('.'), alphanumeric1)(i)?;
         let (i, next) = opt(Mess::next)(i)?;
 
         let m = Mess {
@@ -397,6 +395,12 @@ impl Unit {
     fn string(i: &str) -> IResult<&str, Unit> {
         alpha1(i).map(|(i, s)| (i, Unit::Letters(s.to_string())))
     }
+
+    fn single_zero(i: &str) -> IResult<&str, Unit> {
+        map_res(tag("0"), |s: &str| {
+            s.parse::<u32>().map(|u| Unit::Digits(u))
+        })(i)
+    }
 }
 
 impl fmt::Display for Unit {
@@ -427,9 +431,31 @@ impl Chunk {
     }
 
     fn parse(i: &str) -> IResult<&str, Chunk> {
-        many1(Unit::parse)(i).map(|(i, cs)| (i, Chunk(cs)))
+        map(Chunk::units, |us| Chunk(us))(i)
+    }
+
+    /// Handling `0` is a bit tricky. We can't allow runs of zeros in a chunk,
+    /// since a version like `1.000.1` would parse as `1.0.1`.
+    fn units(i: &str) -> IResult<&str, Vec<Unit>> {
+        alt((
+            Chunk::zero_with_letters,
+            map(Unit::single_zero, |u| vec![u]),
+            many1(Unit::parse),
+        ))(i)
+    }
+
+    fn zero_with_letters(i: &str) -> IResult<&str, Vec<Unit>> {
+        let (i, z) = Unit::single_zero(i)?;
+        let (i, s) = Unit::string(i)?;
+        let (i, c) = Chunk::units(i)?;
+
+        let mut us = vec![z, s];
+        us.extend(c);
+
+        Ok((i, us))
     }
 }
+
 impl PartialOrd for Chunk {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))

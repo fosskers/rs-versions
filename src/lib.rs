@@ -264,17 +264,29 @@ impl fmt::Display for Version {
 /// Some `Mess` values have a shape that is tantalizingly close to a
 /// [`SemVer`](struct.SemVer.html). Example: `1.6.0a+2014+m872b87e73dfb-1`. For
 /// values like these, we can extract the semver-compatible values out with
-/// [`major`][major], etc.
+/// [`nth`][nth], etc.
 ///
 /// In general this is not guaranteed to have well-defined ordering behaviour,
-/// but existing tests show sufficient consistency. [`major`][major], etc., are
-/// used internally where appropriate to enhance accuracy.
+/// but existing tests show sufficient consistency. [`nth`][nth] is used
+/// internally where appropriate to enhance accuracy.
 ///
-/// [major]: #method.major.html
+/// [nth]: #method.nth.html
 ///
 /// # Examples
 ///
-/// TODO
+/// ```
+/// use versions::{Mess, SemVer, Version};
+///
+/// let mess = "20.0026.1_0-2+0.93";
+///
+/// let s = SemVer::new(mess);
+/// let v = Version::new(mess);
+/// let m = Mess::new(mess);
+///
+/// assert!(s.is_none());
+/// assert!(v.is_none());
+/// assert_eq!(Some(mess.to_string()), m.map(|v| format!("{}", v)));
+/// ```
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Mess {
     pub chunk: Vec<String>,
@@ -285,6 +297,26 @@ impl Mess {
     pub fn new(s: &str) -> Option<Mess> {
         match Mess::parse(s) {
             Ok(("", m)) => Some(m),
+            _ => None,
+        }
+    }
+
+    /// Try to extract a position from the `Mess` as a nice integer, as if it
+    /// were a [`SemVer`](struct.SemVer.html).
+    ///
+    /// ```
+    /// use versions::Mess;
+    ///
+    /// let mess = Mess::new("1.6a.0+2014+m872b87e73dfb-1").unwrap();
+    /// assert_eq!(Some(1), mess.nth(0));
+    /// assert_eq!(None, mess.nth(1));
+    /// assert_eq!(Some(0), mess.nth(2));
+    /// ```
+    pub fn nth(&self, x: usize) -> Option<u32> {
+        let i = self.chunk.iter().nth(x)?;
+        let (i, n) = parsers::unsigned(i).ok()?;
+        match i {
+            "" => Some(n),
             _ => None,
         }
     }
@@ -433,7 +465,6 @@ impl fmt::Display for Unit {
     }
 }
 
-// TODO Add more examples.
 /// A logical unit of a version number.
 ///
 /// Can consist of multiple letters and numbers. Groups of these (i.e.
@@ -443,6 +474,8 @@ impl fmt::Display for Unit {
 /// # Examples
 ///
 /// - `r3`
+/// - `0rc1`
+/// - `20150826`
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Chunk(pub Vec<Unit>);
 

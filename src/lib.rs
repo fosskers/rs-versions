@@ -318,6 +318,19 @@ impl Mess {
             value(Sep::Underscore, char('_')),
         ))(i)
     }
+
+    fn pretty(&self) -> String {
+        let node = self.chunk.iter().join(".");
+        let next = self.next.as_ref().map(|(sep, m)| format!("{}{}", sep, m));
+
+        node + &next.unwrap_or("".to_string())
+    }
+}
+
+impl fmt::Display for Mess {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.pretty())
+    }
 }
 
 /// Symbols that separate groups of digits/letters in a version number.
@@ -334,6 +347,18 @@ pub enum Sep {
     Hyphen,
     Plus,
     Underscore,
+}
+
+impl fmt::Display for Sep {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let c = match self {
+            Sep::Colon => ':',
+            Sep::Hyphen => '-',
+            Sep::Plus => '+',
+            Sep::Underscore => '_',
+        };
+        write!(f, "{}", c)
+    }
 }
 
 /// A single unit of a version number. May be digits or a string of characters.
@@ -589,7 +614,6 @@ mod tests {
             "1.0rc0",
             "1.0rc1",
             "1.1rc1",
-            "1.58.0-3",
             "44.0.2403.157-1",
             "0.25-2",
             "8.u51-1",
@@ -600,6 +624,7 @@ mod tests {
         ];
 
         for s in goods {
+            assert!(SemVer::new(s).is_none(), "Shouldn't be SemVer: {}", s);
             assert_eq!(
                 Some(s.to_string()),
                 Version::new(s).map(|v| format!("{}", v))
@@ -627,5 +652,18 @@ mod tests {
         let y = Version::new(b).unwrap();
 
         assert!(x < y, "{} < {}", x, y);
+    }
+
+    #[test]
+    fn good_messes() {
+        let messes = vec!["10.2+0.93+1-1", "003.03-3", "002.000-7", "20.26.1_0-2"];
+
+        for s in messes {
+            let sv = SemVer::new(s);
+            let vr = Version::new(s);
+            assert!(sv.is_none(), "Shouldn't be SemVer: {} -> {:#?}", s, sv);
+            assert!(vr.is_none(), "Shouldn't be Version: {} -> {:#?}", s, vr);
+            assert_eq!(Some(s.to_string()), Mess::new(s).map(|v| format!("{}", v)));
+        }
     }
 }

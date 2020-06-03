@@ -23,24 +23,19 @@
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;
 use nom::branch::alt;
+use nom::character::complete::alphanumeric1;
 use nom::character::complete::{alpha1, char};
 use nom::combinator::opt;
+use nom::combinator::value;
+use nom::multi::separated_list;
 use nom::multi::{many1, separated_nonempty_list};
 use nom::IResult;
 use std::cmp::Ordering;
 use std::fmt;
+
 mod parsers;
 
-// TODO
-// - Just the main structs, a parser for each subtype, and a parser for the
-//   combined `Versioning`.
-// - A lot of the convenience functions in the Haskell version can be made into methods.
-// - Use `Display` for pretty-printing.
-// - NOT exposing the parsers.
-// - No PVP support.
-// - No need to worry about lenses :)
-
-/// An (Ideal) version number that conforms to Semantic Versioning.
+/// An ideal version number that conforms to Semantic Versioning.
 ///
 /// This is a *prescriptive* scheme, meaning that it follows the [SemVer
 /// standard][semver].
@@ -157,7 +152,7 @@ impl fmt::Display for SemVer {
     }
 }
 
-/// A (General) Version.
+/// A version number with decent structure and comparison logic.
 ///
 /// This is a *descriptive* scheme, meaning that it encapsulates the most
 /// common, unconscious patterns that developers use when assigning version
@@ -255,8 +250,91 @@ impl fmt::Display for Version {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
-pub struct Mess;
+/// A complex version number with no specific structure.
+///
+/// Like [`Version`](struct.Version.html) this is a *descriptive* scheme, but it
+/// is based on examples of stupidly crafted, near-lawless version numbers used
+/// in the wild. Versions like this are a considerable burden to package
+/// management software.
+///
+/// With `Mess`, groups of letters/numbers are separated by a period, but can be
+/// further separated by the symbols `_-+:`.
+///
+/// Unfortunately, [`Chunks`](struct.Chunks.html) cannot be used here, as some
+/// developers have numbers like `1.003.04` which make parsers quite sad.
+///
+/// Some `Mess` values have a shape that is tantalizingly close to a
+/// [`SemVer`](struct.SemVer.html). Example: `1.6.0a+2014+m872b87e73dfb-1`. For
+/// values like these, we can extract the semver-compatible values out with
+/// [`major`][major], etc.
+///
+/// In general this is not guaranteed to have well-defined ordering behaviour,
+/// but existing tests show sufficient consistency. [`major`][major], etc., are
+/// used internally where appropriate to enhance accuracy.
+///
+/// [major]: #method.major.html
+///
+/// # Examples
+///
+/// TODO
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct Mess {
+    pub chunk: Vec<String>,
+    pub next: Option<(Sep, Box<Mess>)>,
+}
+
+impl Mess {
+    pub fn new(s: &str) -> Option<Mess> {
+        match Mess::parse(s) {
+            Ok(("", m)) => Some(m),
+            _ => None,
+        }
+    }
+
+    fn parse(i: &str) -> IResult<&str, Mess> {
+        let (i, cs) = separated_list(char('.'), alphanumeric1)(i)?;
+        let (i, next) = opt(Mess::next)(i)?;
+
+        let m = Mess {
+            chunk: cs.iter().map(|s| s.to_string()).collect(),
+            next: next.map(|(s, m)| (s, Box::new(m))),
+        };
+
+        Ok((i, m))
+    }
+
+    fn next(i: &str) -> IResult<&str, (Sep, Mess)> {
+        let (i, sep) = Mess::sep(i)?;
+        let (i, mess) = Mess::parse(i)?;
+
+        Ok((i, (sep, mess)))
+    }
+
+    fn sep(i: &str) -> IResult<&str, Sep> {
+        alt((
+            value(Sep::Colon, char(':')),
+            value(Sep::Hyphen, char('-')),
+            value(Sep::Plus, char('+')),
+            value(Sep::Underscore, char('_')),
+        ))(i)
+    }
+}
+
+/// Symbols that separate groups of digits/letters in a version number.
+///
+/// These are:
+///
+/// - A colon (:). Often denotes an "epoch".
+/// - A hyphen (-).
+/// - A plus (+). Stop using this outside of metadata if you are. Example: `10.2+0.93+1-1`
+/// - An underscore (_). Stop using this if you are.
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum Sep {
+    Colon,
+    Hyphen,
+    Plus,
+    Underscore,
+}
 
 /// A single unit of a version number. May be digits or a string of characters.
 ///

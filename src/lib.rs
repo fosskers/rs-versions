@@ -6,7 +6,7 @@
 //! just plain asinine. This library provides a means of parsing and comparing
 //! *any* style of versioning, be it a nice Semantic Version like this:
 //!
-//! > 1.2.3-r1+git123
+//! > 1.2.3-r1
 //!
 //! ...or a monstrosity like this:
 //!
@@ -29,6 +29,7 @@ use nom::combinator::{map, map_res, opt, value};
 use nom::multi::{many1, separated_nonempty_list};
 use nom::IResult;
 use std::cmp::Ordering;
+use std::cmp::Ordering::{Equal, Greater, Less};
 use std::fmt;
 
 mod parsers;
@@ -96,12 +97,81 @@ impl SemVer {
         }
     }
 
-    fn cmp_version(&self, other: &Version) -> Ordering {
-        Ordering::Equal
+    /// Create a new [`Mess`](struct.Mess.html) from a `SemVer`.
+    pub fn to_mess(&self) -> Mess {
+        Mess {
+            chunk: vec![],
+            next: None,
+        } // TODO
     }
 
+    /// We try our best to analyse the `Version` as if it's a `SemVer`. If we
+    /// can't, we downcast the `SemVer` to a `Version` and restart the process.
+    /// The downcast causes some allocation, and the casted value isn't reused.
+    fn cmp_version(&self, other: &Version) -> Ordering {
+        // A `Version` with a non-zero epoch value is automatically greater than
+        // any `SemVer`.
+        match other.epoch {
+            Some(n) if n > 0 => Greater,
+            _ => match other.nth(0).map(|x| self.major.cmp(&x)) {
+                None => self.to_version().cmp(other),
+                Some(Greater) => Greater,
+                Some(Less) => Less,
+                Some(Equal) => match other.nth(1).map(|x| self.minor.cmp(&x)) {
+                    None => self.to_version().cmp(other),
+                    Some(Greater) => Greater,
+                    Some(Less) => Less,
+                    Some(Equal) => match other.nth(2).map(|x| self.patch.cmp(&x)) {
+                        None => self.to_version().cmp(other),
+                        Some(Greater) => Greater,
+                        Some(Less) => Less,
+                        Some(Equal) => self.pre_rel.cmp(&other.release),
+                    },
+                },
+            },
+        }
+    }
+
+    /// Do our best to compare a `SemVer` and a [`Mess`](struct.Mess.html).
+    ///
+    /// If we're lucky, the `Mess` will be well-formed enough to pull out
+    /// SemVer-like values at each position, yielding sane comparisons.
+    /// Otherwise we're forced to downcast the `SemVer` into a `Mess` and let
+    /// the String-based `Ord` instance of `Mess` handle things.
     fn cmp_mess(&self, other: &Mess) -> Ordering {
-        Ordering::Equal
+        match other.nth(0).map(|x| self.major.cmp(&x)) {
+            None => self.to_mess().cmp(other),
+            Some(Greater) => Greater,
+            Some(Less) => Less,
+            Some(Equal) => match other.nth(1).map(|x| self.minor.cmp(&x)) {
+                None => self.to_mess().cmp(other),
+                Some(Greater) => Greater,
+                Some(Less) => Less,
+                Some(Equal) => match other.nth(2).map(|x| self.patch.cmp(&x)) {
+                    Some(Greater) => Greater,
+                    Some(Less) => Less,
+                    // If they've been equal up to this point, the `Mess` will
+                    // by definition have more to it, meaning that it's more
+                    // likely to be newer, despite its poor shape.
+                    Some(Equal) => self.to_mess().cmp(other),
+                    // Even if we weren't able to extract a standalone patch
+                    // number, we might still be able to find a number at the
+                    // head of the `Chunk` in that position.
+                    None => match other.nth_chunk(2).and_then(|c| c.single_digit_lenient()) {
+                        // We were very close, but in the end the `Mess` had a
+                        // nonsensical value in its patch position.
+                        None => self.to_mess().cmp(other),
+                        Some(p) => match self.patch.cmp(&p) {
+                            Greater => Greater,
+                            Less => Less,
+                            // This follows SemVer's rule that pre-releases have
+                            // lower precedence.
+                            Equal => Greater,
+                        },
+                    },
+                },
+            },
+        }
     }
 
     fn parse(i: &str) -> IResult<&str, SemVer> {
@@ -148,12 +218,12 @@ impl Ord for SemVer {
         let a = (self.major, self.minor, self.patch);
         let b = (other.major, other.minor, other.patch);
         match a.cmp(&b) {
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => match (&self.pre_rel, &other.pre_rel) {
-                (None, None) => Ordering::Equal,
-                (None, _) => Ordering::Greater,
-                (_, None) => Ordering::Less,
+            Less => Less,
+            Greater => Greater,
+            Equal => match (&self.pre_rel, &other.pre_rel) {
+                (None, None) => Equal,
+                (None, _) => Greater,
+                (_, None) => Less,
                 (Some(ap), Some(bp)) => ap.cmp(&bp),
             },
         }
@@ -223,6 +293,7 @@ impl Version {
         self.chunks.0.iter().nth(n).and_then(Chunk::single_digit)
     }
 
+    // TODO
     /// Create a new [`Mess`](struct.Mess.html) from a `Version`.
     pub fn to_mess(&self) -> Mess {
         Mess {
@@ -234,7 +305,7 @@ impl Version {
     /// If we're lucky, we can pull specific numbers out of both inputs and
     /// accomplish the comparison without extra allocations.
     fn cmp_mess(&self, other: &Mess) -> Ordering {
-        Ordering::Equal
+        Equal // TODO
     }
 
     fn parse(i: &str) -> IResult<&str, Version> {
@@ -273,8 +344,8 @@ impl Ord for Version {
         let ae = self.epoch.unwrap_or(0);
         let be = other.epoch.unwrap_or(0);
         match ae.cmp(&be) {
-            Ordering::Equal => match self.chunks.cmp(&other.chunks) {
-                Ordering::Equal => self.release.cmp(&other.release),
+            Equal => match self.chunks.cmp(&other.chunks) {
+                Equal => self.release.cmp(&other.release),
                 ord => ord,
             },
             ord => ord,
@@ -366,6 +437,17 @@ impl Mess {
         }
     }
 
+    /// Like [`nth`](#method.nth), but tries to parse out a full
+    /// [`Chunk`](struct.Chunk.html) instead.
+    fn nth_chunk(&self, x: usize) -> Option<Chunk> {
+        let i = self.chunk.iter().nth(x)?;
+        let (i, c) = Chunk::parse(i).ok()?;
+        match i {
+            "" => Some(c),
+            _ => None,
+        }
+    }
+
     fn parse(i: &str) -> IResult<&str, Mess> {
         let (i, cs) = separated_nonempty_list(char('.'), alphanumeric1)(i)?;
         let (i, next) = opt(Mess::next)(i)?;
@@ -413,7 +495,7 @@ impl PartialOrd for Mess {
 impl Ord for Mess {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.chunk.cmp(&other.chunk) {
-            Ordering::Equal => {
+            Equal => {
                 let an = self.next.as_ref().map(|(_, m)| m);
                 let bn = other.next.as_ref().map(|(_, m)| m);
                 an.cmp(&bn)
@@ -551,6 +633,15 @@ impl Chunk {
         }
     }
 
+    /// Like [`single_digit`](#method.single_digit), but will grab the `u32`
+    /// even if there were more values in the `Chunk`.
+    pub fn single_digit_lenient(&self) -> Option<u32> {
+        match self.0.first() {
+            Some(Unit::Digits(n)) => Some(*n),
+            _ => None,
+        }
+    }
+
     fn parse(i: &str) -> IResult<&str, Chunk> {
         map(Chunk::units, |us| Chunk(us))(i)
     }
@@ -596,26 +687,26 @@ impl Ord for Chunk {
                 // from digits to letters and vice versa, so anything "extra"
                 // must be an `rc` marking or similar. Consider `1.1` compared
                 // to `1.1rc1`.
-                Left(_) => Some(Ordering::Less),
-                Right(_) => Some(Ordering::Greater),
+                Left(_) => Some(Less),
+                Right(_) => Some(Greater),
                 // The usual case where the `Unit` types match, as in `1.2.3.4`
                 // vs `1.2.4.0`.
                 Both(Unit::Digits(a), Unit::Digits(b)) => match a.cmp(b) {
-                    Ordering::Equal => None,
+                    Equal => None,
                     ord => Some(ord),
                 },
                 Both(Unit::Letters(a), Unit::Letters(b)) => match a.cmp(b) {
-                    Ordering::Equal => None,
+                    Equal => None,
                     ord => Some(ord),
                 },
                 // The arbitrary decision to prioritize Letters over Digits has
                 // the effect of allowing this instance to work for `SemVer` as
                 // well as `Version`.
-                Both(Unit::Digits(_), Unit::Letters(_)) => Some(Ordering::Less),
-                Both(Unit::Letters(_), Unit::Digits(_)) => Some(Ordering::Greater),
+                Both(Unit::Digits(_), Unit::Letters(_)) => Some(Less),
+                Both(Unit::Letters(_), Unit::Digits(_)) => Some(Greater),
             })
             .next()
-            .unwrap_or(Ordering::Equal)
+            .unwrap_or(Equal)
     }
 }
 

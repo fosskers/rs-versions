@@ -16,7 +16,7 @@
 //!
 //! If you're parsing version numbers that don't follow a single scheme (say, as
 //! in system packages), then use the [`Versioning`](enum.Versioning.html) type
-//! and its parser `foo`. TODO
+//! and its parser [`Versioning::new`](enum.Versioning.html#method.new).
 
 #![doc(html_root_url = "https://docs.rs/versions/1.0.0")]
 
@@ -73,11 +73,35 @@ pub struct SemVer {
 }
 
 impl SemVer {
+    /// Parse a `SemVer` from some input.
     pub fn new(s: &str) -> Option<SemVer> {
         match SemVer::parse(s) {
             Ok(("", sv)) => Some(sv),
             _ => None,
         }
+    }
+
+    /// Create a new [`Version`](struct.Version.html) from a `SemVer`.
+    pub fn to_version(&self) -> Version {
+        let chunks = Chunks(vec![
+            Chunk(vec![Unit::Digits(self.major)]),
+            Chunk(vec![Unit::Digits(self.minor)]),
+            Chunk(vec![Unit::Digits(self.patch)]),
+        ]);
+
+        Version {
+            epoch: None,
+            chunks,
+            release: self.pre_rel.clone(),
+        }
+    }
+
+    fn cmp_version(&self, other: &Version) -> Ordering {
+        Ordering::Equal
+    }
+
+    fn cmp_mess(&self, other: &Mess) -> Ordering {
+        Ordering::Equal
     }
 
     fn parse(i: &str) -> IResult<&str, SemVer> {
@@ -185,11 +209,32 @@ pub struct Version {
 }
 
 impl Version {
+    /// Parse a `Version` from some input.
     pub fn new(s: &str) -> Option<Version> {
         match Version::parse(s) {
             Ok(("", v)) => Some(v),
             _ => None,
         }
+    }
+
+    /// Try to extract a position from the `Version` as a nice integer, as if it
+    /// were a [`SemVer`](struct.SemVer.html).
+    pub fn nth(&self, n: usize) -> Option<u32> {
+        self.chunks.0.iter().nth(n).and_then(Chunk::single_digit)
+    }
+
+    /// Create a new [`Mess`](struct.Mess.html) from a `Version`.
+    pub fn to_mess(&self) -> Mess {
+        Mess {
+            chunk: vec![],
+            next: None,
+        }
+    }
+
+    /// If we're lucky, we can pull specific numbers out of both inputs and
+    /// accomplish the comparison without extra allocations.
+    fn cmp_mess(&self, other: &Mess) -> Ordering {
+        Ordering::Equal
     }
 
     fn parse(i: &str) -> IResult<&str, Version> {
@@ -484,6 +529,28 @@ impl Chunk {
         Chunk(Vec::new())
     }
 
+    /// If this `Chunk` is made up of a single [`Unit::Digits`](enum.Unit.html),
+    /// then pull out the inner value.
+    ///
+    /// ```
+    /// use versions::{Chunk, Unit};
+    ///
+    /// let v = Chunk(vec![Unit::Digits(1)]);
+    /// assert_eq!(Some(1), v.single_digit());
+    ///
+    /// let v = Chunk(vec![Unit::Letters("abc".to_string())]);
+    /// assert_eq!(None, v.single_digit());
+    ///
+    /// let v = Chunk(vec![Unit::Digits(1), Unit::Letters("abc".to_string())]);
+    /// assert_eq!(None, v.single_digit());
+    /// ```
+    pub fn single_digit(&self) -> Option<u32> {
+        match self.0.first() {
+            Some(Unit::Digits(n)) if self.0.len() == 1 => Some(*n),
+            _ => None,
+        }
+    }
+
     fn parse(i: &str) -> IResult<&str, Chunk> {
         map(Chunk::units, |us| Chunk(us))(i)
     }
@@ -615,6 +682,10 @@ pub enum Versioning {
 }
 
 impl Versioning {
+    /// Create a `Versioning` by attempting to parse the input first as
+    /// [`SemVer`](struct.SemVer.html), then as a
+    /// [`Version`](struct.Version.html), and finally as a
+    /// [`Mess`](struct.Mess.html).
     pub fn new(s: &str) -> Option<Versioning> {
         SemVer::new(s)
             .map(Versioning::Ideal)
@@ -643,6 +714,35 @@ impl Versioning {
         match self {
             Versioning::Complex(_) => true,
             _ => false,
+        }
+    }
+}
+impl PartialOrd for Versioning {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Versioning {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            // Obvious comparisons when the types are the same.
+            (Versioning::Ideal(a), Versioning::Ideal(b)) => a.cmp(b),
+            (Versioning::General(a), Versioning::General(b)) => a.cmp(b),
+            (Versioning::Complex(a), Versioning::Complex(b)) => a.cmp(b),
+            // SemVer and Version can compare nicely.
+            (Versioning::Ideal(a), Versioning::General(b)) => a.cmp_version(b),
+            (Versioning::General(a), Versioning::Ideal(b)) => b.cmp_version(a).reverse(),
+            // If we're lucky, the `Mess` is well-formed enough to pull
+            // SemVer-like values out of its initial positions. Otherwise we
+            // need to downcast the `SemVer` into a `Mess` and hope for the
+            // best.
+            (Versioning::Ideal(a), Versioning::Complex(b)) => a.cmp_mess(b),
+            (Versioning::Complex(a), Versioning::Ideal(b)) => b.cmp_mess(a).reverse(),
+            // Same as above - we might get lucky, we might not.
+            // The lucky fate means no extra allocations.
+            (Versioning::General(a), Versioning::Complex(b)) => a.cmp_mess(b),
+            (Versioning::Complex(a), Versioning::General(b)) => b.cmp_mess(a).reverse(),
         }
     }
 }

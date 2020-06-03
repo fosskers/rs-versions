@@ -601,6 +601,13 @@ pub enum Versioning {
 }
 
 impl Versioning {
+    pub fn new(s: String) -> Option<Versioning> {
+        SemVer::new(&s)
+            .map(Versioning::Ideal)
+            .or(Version::new(&s).map(Versioning::General))
+            .or(Mess::new(&s).map(Versioning::Complex))
+    }
+
     /// A short-hand for detecting an inner [`SemVer`](struct.SemVer.html).
     pub fn is_ideal(&self) -> bool {
         match self {

@@ -83,7 +83,7 @@ impl SemVer {
         }
     }
 
-    /// Create a new [`Version`](struct.Version.html) from a `SemVer`.
+    /// A lossy conversion from `SemVer` to [`Version`](struct.Version.html).
     ///
     /// **Note:** Drops `SemVer` metadata!
     ///
@@ -109,7 +109,7 @@ impl SemVer {
         }
     }
 
-    /// Create a new [`Mess`](struct.Mess.html) from a `SemVer`.
+    /// A lossless conversion from `SemVer` to [`Mess`](struct.Mess.html).
     ///
     /// ```
     /// use versions::SemVer;
@@ -322,11 +322,21 @@ impl Version {
 
     /// Try to extract a position from the `Version` as a nice integer, as if it
     /// were a [`SemVer`](struct.SemVer.html).
+    ///
+    /// ```
+    /// use versions::Version;
+    ///
+    /// let mess = Version::new("1:2.a.4.5.6.7-r1").unwrap();
+    /// assert_eq!(Some(2), mess.nth(0));
+    /// assert_eq!(None, mess.nth(1));
+    /// assert_eq!(Some(4), mess.nth(2));
+    /// ```
+
     pub fn nth(&self, n: usize) -> Option<u32> {
         self.chunks.0.iter().nth(n).and_then(Chunk::single_digit)
     }
 
-    /// Create a new [`Mess`](struct.Mess.html) from a `Version`.
+    /// A lossless conversion from `Version` to [`Mess`](struct.Mess.html).
     ///
     /// ```
     /// use versions::Version;
@@ -507,6 +517,7 @@ pub struct Mess {
 }
 
 impl Mess {
+    /// Parse a `Mess` from some input.
     pub fn new(s: &str) -> Option<Mess> {
         match Mess::parse(s) {
             Ok(("", m)) => Some(m),

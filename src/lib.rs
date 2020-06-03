@@ -743,6 +743,19 @@ impl Chunk {
 
     /// Like [`single_digit`](#method.single_digit), but will grab the `u32`
     /// even if there were more values in the `Chunk`.
+    ///
+    /// ```
+    /// use versions::{Chunk, Unit};
+    ///
+    /// let v = Chunk(vec![Unit::Digits(1)]);
+    /// assert_eq!(Some(1), v.single_digit_lenient());
+    ///
+    /// let v = Chunk(vec![Unit::Letters("abc".to_string())]);
+    /// assert_eq!(None, v.single_digit_lenient());
+    ///
+    /// let v = Chunk(vec![Unit::Digits(0), Unit::Letters("a".to_string())]);
+    /// assert_eq!(Some(0), v.single_digit_lenient());
+    /// ```
     pub fn single_digit_lenient(&self) -> Option<u32> {
         match self.0.first() {
             Some(Unit::Digits(n)) => Some(*n),
@@ -767,10 +780,12 @@ impl Chunk {
     fn zero_with_letters(i: &str) -> IResult<&str, Vec<Unit>> {
         let (i, z) = Unit::single_zero(i)?;
         let (i, s) = Unit::string(i)?;
-        let (i, c) = Chunk::units(i)?;
+        let (i, c) = opt(Chunk::units)(i)?;
 
         let mut us = vec![z, s];
-        us.extend(c);
+        if let Some(x) = c {
+            us.extend(x);
+        }
 
         Ok((i, us))
     }
@@ -1099,5 +1114,30 @@ mod tests {
         let y = Mess::new(b).unwrap();
 
         assert!(x < y, "{} < {}", x, y);
+    }
+
+    #[test]
+    fn mixed_comparisons() {
+        cmp_versioning("1.2.2r1-1", "1.2.3-1");
+        cmp_versioning("1.2.3-1", "1.2.4r1-1");
+        cmp_versioning("1.2.3-1", "2+0007-1");
+        cmp_versioning("1.2.3r1-1", "2+0007-1");
+        cmp_versioning("1.2-5", "1.2.3-1");
+        cmp_versioning("1.6.0a+2014+m872b87e73dfb-1", "1.6.0-1");
+    }
+
+    fn cmp_versioning(a: &str, b: &str) {
+        let x = Versioning::new(a).unwrap();
+        let y = Versioning::new(b).unwrap();
+
+        assert!(
+            x < y,
+            "\nAttempted: {} < {}\nLesser: {:?}\nGreater: {:?}\nThinks: {:?}",
+            x,
+            y,
+            x,
+            y,
+            x.cmp(&y)
+        );
     }
 }

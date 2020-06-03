@@ -305,7 +305,49 @@ impl Version {
     /// If we're lucky, we can pull specific numbers out of both inputs and
     /// accomplish the comparison without extra allocations.
     fn cmp_mess(&self, other: &Mess) -> Ordering {
-        Equal // TODO
+        match self.epoch {
+            Some(e) if e > 0 && other.chunk.len() == 1 => match &other.next {
+                // A near-nonsense case where a `Mess` is comprised of a single
+                // digit and nothing else. In this case its epoch would be
+                // considered 0.
+                None => Greater,
+                Some((Sep::Colon, m)) => match other.nth(0) {
+                    // The Mess's epoch is a letter, etc.
+                    None => Greater,
+                    Some(me) => match e.cmp(&me) {
+                        Equal => Version::cmp_mess_continued(self, &m),
+                        ord => ord,
+                    },
+                },
+                // Similar nonsense, where the Mess had a single *something*
+                // before some non-colon separator. We then consider the epoch
+                // to be 0.
+                Some(_) => Greater,
+            },
+            // The `Version` has an epoch but the `Mess` doesn't. Or if it does,
+            // it's malformed.
+            Some(e) if e > 0 => Greater,
+            _ => Version::cmp_mess_continued(self, &other),
+        }
+    }
+
+    /// It's assumed the epoch check has already been done, and we're comparing
+    /// the main parts of each version now.
+    fn cmp_mess_continued(&self, other: &Mess) -> Ordering {
+        (0..)
+            .filter_map(
+                |n| match self.nth(n).and_then(|x| other.nth(n).map(|y| x.cmp(&y))) {
+                    // Sane values can't be extracted from one or both of the
+                    // arguments.
+                    None => Some(self.to_mess().cmp(other)),
+                    Some(Greater) => Some(Greater),
+                    Some(Less) => Some(Less),
+                    // Continue to the next position.
+                    Some(Equal) => None,
+                },
+            )
+            .next()
+            .unwrap_or_else(|| self.to_mess().cmp(other))
     }
 
     fn parse(i: &str) -> IResult<&str, Version> {
@@ -780,8 +822,8 @@ impl Versioning {
     pub fn new(s: &str) -> Option<Versioning> {
         SemVer::new(s)
             .map(Versioning::Ideal)
-            .or(Version::new(s).map(Versioning::General))
-            .or(Mess::new(s).map(Versioning::Complex))
+            .or_else(|| Version::new(s).map(Versioning::General))
+            .or_else(|| Mess::new(s).map(Versioning::Complex))
     }
 
     /// A short-hand for detecting an inner [`SemVer`](struct.SemVer.html).

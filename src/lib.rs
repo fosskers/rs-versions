@@ -17,7 +17,27 @@
 //! If you're parsing several version numbers that don't follow a single scheme
 //! (say, as in system packages), then use the
 //! [`Versioning`](enum.Versioning.html) type and its parser
-//! [`Versioning::new`](enum.Versioning.html#method.new).
+//! [`Versioning::new`](enum.Versioning.html#method.new). Otherwise, each main
+//! type - [`SemVer`][semver], [`Version`][version], or [`Mess`][mess] - can be
+//! parsed on their own via the `new` method (e.g.
+//! [`SemVer::new`](struct.SemVer.html#method.new)).
+//!
+//! # Examples
+//!
+//! ```
+//! use versions::Versioning;
+//!
+//! let good = Versioning::new("1.6.0").unwrap();
+//! let evil = Versioning::new("1.6.0a+2014+m872b87e73dfb-1").unwrap();
+//!
+//! assert!(good.is_ideal());   // It parsed as a `SemVer`.
+//! assert!(evil.is_complex()); // It parsed as a `Mess`.
+//! assert!(good > evil);       // We can compare them anyway!
+//! ```
+//!
+//! [semver]: struct.SemVer.html
+//! [version]: struct.Version.html
+//! [mess]: struct.Mess.html
 
 #![doc(html_root_url = "https://docs.rs/versions/1.0.0")]
 
@@ -486,8 +506,8 @@ impl fmt::Display for Version {
 ///
 /// Some `Mess` values have a shape that is tantalizingly close to a
 /// [`SemVer`](struct.SemVer.html). Example: `1.6.0a+2014+m872b87e73dfb-1`. For
-/// values like these, we can extract the semver-compatible values out with
-/// [`nth`][nth], etc.
+/// values like these, we can extract the SemVer-compatible values out with
+/// [`nth`][nth].
 ///
 /// In general this is not guaranteed to have well-defined ordering behaviour,
 /// but existing tests show sufficient consistency. [`nth`][nth] is used
@@ -619,7 +639,8 @@ impl fmt::Display for Mess {
     }
 }
 
-/// Symbols that separate groups of digits/letters in a version number.
+/// Symbols that separate groups of digits/letters in a version number. Used in
+/// the [`Mess`](struct.Mess.html) type.
 ///
 /// These are:
 ///
@@ -706,6 +727,9 @@ impl fmt::Display for Unit {
 /// [`Chunks`](type.Chunks.html)) are separated by periods to form a full
 /// version number.
 ///
+/// Defined as a newtype wrapper so that we can define custom parser and trait
+/// methods.
+///
 /// # Examples
 ///
 /// - `r3`
@@ -715,10 +739,6 @@ impl fmt::Display for Unit {
 pub struct Chunk(pub Vec<Unit>);
 
 impl Chunk {
-    pub fn new() -> Chunk {
-        Chunk(Vec::new())
-    }
-
     /// If this `Chunk` is made up of a single [`Unit::Digits`](enum.Unit.html),
     /// then pull out the inner value.
     ///
@@ -841,14 +861,13 @@ impl fmt::Display for Chunk {
 }
 
 /// Multiple [`Chunk`](struct.Chunk.html) values.
+///
+/// Defined as a newtype wrapper so that we can define custom parser and trait
+/// methods.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct Chunks(pub Vec<Chunk>);
 
 impl Chunks {
-    pub fn new() -> Chunks {
-        Chunks(Vec::new())
-    }
-
     fn parse(i: &str) -> IResult<&str, Chunks> {
         let (i, cs) = separated_nonempty_list(char('.'), Chunk::parse)(i)?;
         Ok((i, Chunks(cs)))

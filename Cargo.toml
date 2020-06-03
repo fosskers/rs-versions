@@ -3,6 +3,13 @@ name = "versions"
 version = "1.0.0"
 authors = ["Colin Woodbury <colin@fosskers.ca>"]
 edition = "2018"
+description = "A library for parsing and comparing software version numbers."
+homepage = "https://github.com/fosskers/rs-versions"
+repository = "https://github.com/fosskers/rs-versions"
+readme = "README.md"
+license = "MIT"
+keywords = ["version", "compare", "semantic"]
+categories = ["parser-implementations"]
 
 [dependencies]
 nom = "5.1"

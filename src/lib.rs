@@ -593,6 +593,20 @@ impl fmt::Display for Chunks {
 
 /// A top-level Versioning type which acts as a wrapper for the more specific
 /// types.
+///
+/// # Examples
+///
+/// ```
+/// use versions::Versioning;
+///
+/// let a = Versioning::new("1.2.3-1").unwrap();   // SemVer.
+/// let b = Versioning::new("1.2.3r1").unwrap();   // Not SemVer but good enough.
+/// let c = Versioning::new("000.007-1").unwrap(); // Garbage.
+///
+/// assert!(a.is_ideal());
+/// assert!(b.is_general());
+/// assert!(c.is_complex());
+/// ```
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Versioning {
     Ideal(SemVer),
@@ -601,11 +615,11 @@ pub enum Versioning {
 }
 
 impl Versioning {
-    pub fn new(s: String) -> Option<Versioning> {
-        SemVer::new(&s)
+    pub fn new(s: &str) -> Option<Versioning> {
+        SemVer::new(s)
             .map(Versioning::Ideal)
-            .or(Version::new(&s).map(Versioning::General))
-            .or(Mess::new(&s).map(Versioning::Complex))
+            .or(Version::new(s).map(Versioning::General))
+            .or(Mess::new(s).map(Versioning::Complex))
     }
 
     /// A short-hand for detecting an inner [`SemVer`](struct.SemVer.html).
@@ -629,6 +643,16 @@ impl Versioning {
         match self {
             Versioning::Complex(_) => true,
             _ => false,
+        }
+    }
+}
+
+impl fmt::Display for Versioning {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Versioning::Ideal(s) => write!(f, "{}", s),
+            Versioning::General(v) => write!(f, "{}", v),
+            Versioning::Complex(m) => write!(f, "{}", m),
         }
     }
 }

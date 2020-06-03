@@ -326,13 +326,35 @@ impl Version {
         self.chunks.0.iter().nth(n).and_then(Chunk::single_digit)
     }
 
-    // TODO
     /// Create a new [`Mess`](struct.Mess.html) from a `Version`.
+    ///
+    /// ```
+    /// use versions::Version;
+    ///
+    /// let orig = "1:1.2.3-r1";
+    /// let mess = Version::new(orig).unwrap().to_mess();
+    ///
+    /// assert_eq!(orig, format!("{}", mess));
+    /// ```
     pub fn to_mess(&self) -> Mess {
-        Mess {
-            chunk: vec![],
-            next: None,
+        match self.epoch {
+            None => self.to_mess_continued(),
+            Some(e) => {
+                let chunk = vec![e.to_string()];
+                let next = Some((Sep::Colon, Box::new(self.to_mess_continued())));
+                Mess { chunk, next }
+            }
         }
+    }
+
+    /// Convert to a `Mess` without considering the epoch.
+    fn to_mess_continued(&self) -> Mess {
+        let chunk = self.chunks.0.iter().map(|c| format!("{}", c)).collect();
+        let next = self.release.as_ref().map(|cs| {
+            let chunk = cs.0.iter().map(|c| format!("{}", c)).collect();
+            (Sep::Hyphen, Box::new(Mess { chunk, next: None }))
+        });
+        Mess { chunk, next }
     }
 
     /// If we're lucky, we can pull specific numbers out of both inputs and

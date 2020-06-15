@@ -353,7 +353,7 @@ impl Version {
     /// ```
 
     pub fn nth(&self, n: usize) -> Option<u32> {
-        self.chunks.0.iter().nth(n).and_then(Chunk::single_digit)
+        self.chunks.0.get(n).and_then(Chunk::single_digit)
     }
 
     /// A lossless conversion from `Version` to [`Mess`](struct.Mess.html).
@@ -557,7 +557,7 @@ impl Mess {
     /// assert_eq!(Some(0), mess.nth(2));
     /// ```
     pub fn nth(&self, x: usize) -> Option<u32> {
-        let i = self.chunk.iter().nth(x)?;
+        let i = self.chunk.get(x)?;
         let (i, n) = parsers::unsigned(i).ok()?;
         match i {
             "" => Some(n),
@@ -568,7 +568,7 @@ impl Mess {
     /// Like [`nth`](#method.nth), but tries to parse out a full
     /// [`Chunk`](struct.Chunk.html) instead.
     fn nth_chunk(&self, x: usize) -> Option<Chunk> {
-        let i = self.chunk.iter().nth(x)?;
+        let i = self.chunk.get(x)?;
         let (i, c) = Chunk::parse(i).ok()?;
         match i {
             "" => Some(c),
@@ -608,7 +608,7 @@ impl Mess {
         let node = self.chunk.iter().join(".");
         let next = self.next.as_ref().map(|(sep, m)| format!("{}{}", sep, m));
 
-        node + &next.unwrap_or("".to_string())
+        node + &next.unwrap_or_else(|| "".to_string())
     }
 }
 
@@ -687,9 +687,10 @@ impl Unit {
     // stable Rust.
     /// Smart constructor for a `Unit` made of letters.
     pub fn from_string(s: String) -> Option<Unit> {
-        match s.chars().all(|c| c.is_ascii_alphabetic()) {
-            true => Some(Unit::Letters(s)),
-            false => None,
+        if s.chars().all(|c| c.is_ascii_alphabetic()) {
+            Some(Unit::Letters(s))
+        } else {
+            None
         }
     }
 
@@ -706,9 +707,7 @@ impl Unit {
     }
 
     fn single_zero(i: &str) -> IResult<&str, Unit> {
-        map_res(tag("0"), |s: &str| {
-            s.parse::<u32>().map(|u| Unit::Digits(u))
-        })(i)
+        map_res(tag("0"), |s: &str| s.parse::<u32>().map(Unit::Digits))(i)
     }
 }
 
@@ -784,7 +783,7 @@ impl Chunk {
     }
 
     fn parse(i: &str) -> IResult<&str, Chunk> {
-        map(Chunk::units, |us| Chunk(us))(i)
+        map(Chunk::units, Chunk)(i)
     }
 
     /// Handling `0` is a bit tricky. We can't allow runs of zeros in a chunk,

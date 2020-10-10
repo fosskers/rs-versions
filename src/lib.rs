@@ -1022,6 +1022,8 @@ mod tests {
             "a.b.c",
             "1.01.1",
             "1.2.3+a1b!2c3.1",
+            "",
+            "1.2.3 ",
         ];
 
         bads.iter().for_each(|s| assert_eq!(None, SemVer::new(s)));
@@ -1076,6 +1078,13 @@ mod tests {
     }
 
     #[test]
+    fn bad_versions() {
+        let bads = vec!["", "1.2 "];
+
+        bads.iter().for_each(|b| assert_eq!(None, Version::new(b)));
+    }
+
+    #[test]
     fn version_ord() {
         let vs = vec!["0.9.9.9", "1.0.0.0", "1.0.0.1", "2"];
 
@@ -1108,6 +1117,13 @@ mod tests {
             assert!(vr.is_none(), "Shouldn't be Version: {} -> {:#?}", s, vr);
             assert_eq!(Some(s.to_string()), Mess::new(s).map(|v| format!("{}", v)));
         }
+    }
+
+    #[test]
+    fn bad_messes() {
+        let bads = vec!["", "003.03-3 "];
+
+        bads.iter().for_each(|b| assert_eq!(None, Mess::new(b)));
     }
 
     #[test]

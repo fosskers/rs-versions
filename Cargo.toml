@@ -14,7 +14,6 @@ categories = ["parser-implementations"]
 [dependencies]
 nom = "5.1"
 itertools = "0.9"
-nonempty = "0.5"
 
 [dev-dependencies]
 version-sync = "0.9"

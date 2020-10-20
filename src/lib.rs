@@ -45,10 +45,11 @@ use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::character::complete::{alpha1, alphanumeric1, char};
+use nom::character::complete::{alpha1, char};
 use nom::combinator::{map, map_res, opt, value};
 use nom::multi::{many1, separated_nonempty_list};
 use nom::IResult;
+use nonempty::NonEmpty;
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::fmt;
@@ -140,22 +141,22 @@ impl SemVer {
     /// assert_eq!(orig, format!("{}", mess));
     /// ```
     pub fn to_mess(&self) -> Mess {
-        let chunk = vec![
-            self.major.to_string(),
-            self.minor.to_string(),
-            self.patch.to_string(),
+        let chunks = vec![
+            MChunk::Digit(self.major, self.major.to_string()),
+            MChunk::Digit(self.minor, self.minor.to_string()),
+            MChunk::Digit(self.patch, self.patch.to_string()),
         ];
         let next = self.pre_rel.as_ref().map(|pr| {
-            let chunk = pr.0.iter().map(|c| format!("{}", c)).collect();
+            let chunks = pr.0.iter().map(|c| c.mchunk()).collect();
             let next = self.meta.as_ref().map(|meta| {
-                let chunk = meta.0.iter().map(|m| format!("{}", m)).collect();
-                (Sep::Plus, Box::new(Mess { chunk, next: None }))
+                let chunks = meta.0.iter().map(|m| m.mchunk()).collect();
+                (Sep::Plus, Box::new(Mess { chunks, next: None }))
             });
 
-            (Sep::Hyphen, Box::new(Mess { chunk, next }))
+            (Sep::Hyphen, Box::new(Mess { chunks, next }))
         });
 
-        Mess { chunk, next }
+        Mess { chunks, next }
     }
 
     /// We try our best to analyse the `Version` as if it's a `SemVer`. If we
@@ -370,28 +371,28 @@ impl Version {
         match self.epoch {
             None => self.to_mess_continued(),
             Some(e) => {
-                let chunk = vec![e.to_string()];
+                let chunks = vec![MChunk::Digit(e, e.to_string())];
                 let next = Some((Sep::Colon, Box::new(self.to_mess_continued())));
-                Mess { chunk, next }
+                Mess { chunks, next }
             }
         }
     }
 
     /// Convert to a `Mess` without considering the epoch.
     fn to_mess_continued(&self) -> Mess {
-        let chunk = self.chunks.0.iter().map(|c| format!("{}", c)).collect();
+        let chunks = self.chunks.0.iter().map(|c| c.mchunk()).collect();
         let next = self.release.as_ref().map(|cs| {
-            let chunk = cs.0.iter().map(|c| format!("{}", c)).collect();
-            (Sep::Hyphen, Box::new(Mess { chunk, next: None }))
+            let chunks = cs.0.iter().map(|c| c.mchunk()).collect();
+            (Sep::Hyphen, Box::new(Mess { chunks, next: None }))
         });
-        Mess { chunk, next }
+        Mess { chunks, next }
     }
 
     /// If we're lucky, we can pull specific numbers out of both inputs and
     /// accomplish the comparison without extra allocations.
     fn cmp_mess(&self, other: &Mess) -> Ordering {
         match self.epoch {
-            Some(e) if e > 0 && other.chunk.len() == 1 => match &other.next {
+            Some(e) if e > 0 && other.chunks.len() == 1 => match &other.next {
                 // A near-nonsense case where a `Mess` is comprised of a single
                 // digit and nothing else. In this case its epoch would be
                 // considered 0.
@@ -532,7 +533,7 @@ impl fmt::Display for Version {
 /// ```
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Mess {
-    pub chunk: Vec<String>,
+    pub chunks: Vec<MChunk>,
     pub next: Option<(Sep, Box<Mess>)>,
 }
 
@@ -557,19 +558,17 @@ impl Mess {
     /// assert_eq!(Some(0), mess.nth(2));
     /// ```
     pub fn nth(&self, x: usize) -> Option<u32> {
-        let i = self.chunk.get(x)?;
-        let (i, n) = parsers::unsigned(i).ok()?;
-        match i {
-            "" => Some(n),
+        self.chunks.get(x).and_then(|chunk| match chunk {
+            MChunk::Digit(i, _) => Some(*i),
             _ => None,
-        }
+        })
     }
 
     /// Like [`nth`](#method.nth), but tries to parse out a full
     /// [`Chunk`](struct.Chunk.html) instead.
     fn nth_chunk(&self, x: usize) -> Option<Chunk> {
-        let i = self.chunk.get(x)?;
-        let (i, c) = Chunk::parse(i).ok()?;
+        let chunk = self.chunks.get(x)?.text();
+        let (i, c) = Chunk::parse(chunk).ok()?;
         match i {
             "" => Some(c),
             _ => None,
@@ -577,11 +576,11 @@ impl Mess {
     }
 
     fn parse(i: &str) -> IResult<&str, Mess> {
-        let (i, cs) = separated_nonempty_list(char('.'), alphanumeric1)(i)?;
+        let (i, chunks) = separated_nonempty_list(char('.'), MChunk::parse)(i)?;
         let (i, next) = opt(Mess::next)(i)?;
 
         let m = Mess {
-            chunk: cs.iter().map(|s| s.to_string()).collect(),
+            chunks,
             next: next.map(|(s, m)| (s, Box::new(m))),
         };
 
@@ -605,7 +604,7 @@ impl Mess {
     }
 
     fn pretty(&self) -> String {
-        let node = self.chunk.iter().join(".");
+        let node = self.chunks.iter().join(".");
         let next = self.next.as_ref().map(|(sep, m)| format!("{}{}", sep, m));
 
         node + &next.unwrap_or_else(|| "".to_string())
@@ -622,7 +621,7 @@ impl PartialOrd for Mess {
 /// have *lower* precedence than normal versions.
 impl Ord for Mess {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.chunk.cmp(&other.chunk) {
+        match self.chunks.cmp(&other.chunks) {
             Equal => {
                 let an = self.next.as_ref().map(|(_, m)| m);
                 let bn = other.next.as_ref().map(|(_, m)| m);
@@ -636,6 +635,79 @@ impl Ord for Mess {
 impl fmt::Display for Mess {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.pretty())
+    }
+}
+
+/// Possible values of a section of a [`Mess`](struct.Mess.html).
+///
+/// A numeric value is extracted if it could be, alongside the original text it
+/// came from. This preserves both `Ord` and `Display` behaviour for versions
+/// like `1.003.0`.
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum MChunk {
+    /// A nice numeric value.
+    Digit(u32, String),
+    /// A numeric value preceeded by an `r`, indicating a revision.
+    Rev(u32, String),
+    /// Anything else.
+    Plain(String),
+}
+
+impl MChunk {
+    /// Extract the original `String`, no matter which variant it parsed into.
+    pub fn text(&self) -> &str {
+        match self {
+            MChunk::Digit(_, s) => s,
+            MChunk::Rev(_, s) => s,
+            MChunk::Plain(s) => s,
+        }
+    }
+
+    fn parse(i: &str) -> IResult<&str, MChunk> {
+        alt((MChunk::digits, MChunk::rev, MChunk::plain))(i)
+    }
+
+    fn digits(i: &str) -> IResult<&str, MChunk> {
+        todo!()
+    }
+
+    fn rev(i: &str) -> IResult<&str, MChunk> {
+        todo!()
+    }
+
+    fn plain(i: &str) -> IResult<&str, MChunk> {
+        todo!()
+    }
+}
+
+impl PartialOrd for MChunk {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for MChunk {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            // Normal cases.
+            (MChunk::Digit(a, _), MChunk::Digit(b, _)) => a.cmp(b),
+            (MChunk::Rev(a, _), MChunk::Rev(b, _)) => a.cmp(b),
+            // If I'm a concrete number and you're just a revision, then I'm greater no matter what.
+            (MChunk::Digit(_, _), MChunk::Rev(_, _)) => Greater,
+            (MChunk::Rev(_, _), MChunk::Digit(_, _)) => Less,
+            // There's no sensible pairing, so we fall back to String-based comparison.
+            (a, b) => a.text().cmp(b.text()),
+        }
+    }
+}
+
+impl fmt::Display for MChunk {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MChunk::Digit(_, s) => write!(f, "{}", s),
+            MChunk::Rev(_, s) => write!(f, "{}", s),
+            MChunk::Plain(s) => write!(f, "{}", s),
+        }
     }
 }
 
@@ -780,6 +852,10 @@ impl Chunk {
             Some(Unit::Digits(n)) => Some(*n),
             _ => None,
         }
+    }
+
+    fn mchunk(&self) -> MChunk {
+        todo!()
     }
 
     fn parse(i: &str) -> IResult<&str, Chunk> {
@@ -1158,6 +1234,8 @@ mod tests {
         cmp_versioning("1.2.3r1-1", "2+0007-1");
         cmp_versioning("1.2-5", "1.2.3-1");
         cmp_versioning("1.6.0a+2014+m872b87e73dfb-1", "1.6.0-1");
+        // cmp_versioning("1.11.0.git.20200404-1", "1.11.0+20200830-1");
+        cmp_versioning("0.17.0+r8+gc41db5f1-1", "0.17.0+r157+g584760cf-1");
     }
 
     fn cmp_versioning(a: &str, b: &str) {

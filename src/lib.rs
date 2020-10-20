@@ -46,8 +46,7 @@ use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{alpha1, alphanumeric1, char, digit1};
-use nom::combinator::recognize;
-use nom::combinator::{map, map_res, opt, value};
+use nom::combinator::{map, map_res, opt, peek, recognize, value};
 use nom::multi::{many1, separated_nonempty_list};
 use nom::IResult;
 use std::cmp::Ordering;
@@ -671,6 +670,7 @@ impl MChunk {
         let (i, (u, s)) = map_res(recognize(digit1), |s: &str| {
             s.parse::<u32>().map(|u| (u, s))
         })(i)?;
+        let (i, _) = alt((peek(recognize(char('.'))), peek(recognize(Mess::sep))))(i)?;
         let chunk = MChunk::Digits(u, s.to_string());
         Ok((i, chunk))
     }
@@ -680,6 +680,7 @@ impl MChunk {
         let (i, (u, s)) = map_res(recognize(digit1), |s: &str| {
             s.parse::<u32>().map(|u| (u, s))
         })(i)?;
+        let (i, _) = alt((peek(recognize(char('.'))), peek(recognize(Mess::sep))))(i)?;
         let chunk = MChunk::Rev(u, format!("r{}", s));
         Ok((i, chunk))
     }
@@ -1206,7 +1207,15 @@ mod tests {
 
     #[test]
     fn good_messes() {
-        let messes = vec!["10.2+0.93+1-1", "003.03-3", "002.000-7", "20.26.1_0-2"];
+        let messes = vec![
+            "10.2+0.93+1-1",
+            "003.03-3",
+            "002.000-7",
+            "20.26.1_0-2",
+            "1.6.0a+2014+m872b87e73dfb-1",
+            "0.17.0+r8+gc41db5f1-1",
+            "0.17.0+r157+g584760cf-1",
+        ];
 
         for s in messes {
             let sv = SemVer::new(s);

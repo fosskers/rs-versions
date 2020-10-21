@@ -158,24 +158,27 @@ impl SemVer {
         Mess { chunks, next }
     }
 
-    /// We try our best to analyse the `Version` as if it's a `SemVer`. If we
-    /// can't, we downcast the `SemVer` to a `Version` and restart the process.
-    /// The downcast causes some allocation, and the casted value isn't reused.
+    /// Analyse the `Version` as if it's a `SemVer`.
+    ///
+    /// `nth_lenient` pulls a leading digit from the `Version`'s chunk if it
+    /// could. If it couldn't, that chunk is some string (perhaps a git hash)
+    /// and is considered as marking a beta/prerelease version. It is thus
+    /// considered less than the `SemVer`.
     fn cmp_version(&self, other: &Version) -> Ordering {
         // A `Version` with a non-zero epoch value is automatically greater than
         // any `SemVer`.
         match other.epoch {
             Some(n) if n > 0 => Greater,
-            _ => match other.nth(0).map(|x| self.major.cmp(&x)) {
-                None => self.to_version().cmp(other),
+            _ => match other.nth_lenient(0).map(|x| self.major.cmp(&x)) {
+                None => Greater,
                 Some(Greater) => Greater,
                 Some(Less) => Less,
-                Some(Equal) => match other.nth(1).map(|x| self.minor.cmp(&x)) {
-                    None => self.to_version().cmp(other),
+                Some(Equal) => match other.nth_lenient(1).map(|x| self.minor.cmp(&x)) {
+                    None => Greater,
                     Some(Greater) => Greater,
                     Some(Less) => Less,
-                    Some(Equal) => match other.nth(2).map(|x| self.patch.cmp(&x)) {
-                        None => self.to_version().cmp(other),
+                    Some(Equal) => match other.nth_lenient(2).map(|x| self.patch.cmp(&x)) {
+                        None => Greater,
                         Some(Greater) => Greater,
                         Some(Less) => Less,
                         Some(Equal) => self.pre_rel.cmp(&other.release),
@@ -351,9 +354,13 @@ impl Version {
     /// assert_eq!(None, mess.nth(1));
     /// assert_eq!(Some(4), mess.nth(2));
     /// ```
-
     pub fn nth(&self, n: usize) -> Option<u32> {
         self.chunks.0.get(n).and_then(Chunk::single_digit)
+    }
+
+    /// Like `nth`, but pulls a number even if it was followed by letters.
+    pub fn nth_lenient(&self, n: usize) -> Option<u32> {
+        self.chunks.0.get(n).and_then(Chunk::single_digit_lenient)
     }
 
     /// A lossless conversion from `Version` to [`Mess`](struct.Mess.html).
@@ -1268,6 +1275,8 @@ mod tests {
         cmp_versioning("1.6.0a+2014+m872b87e73dfb-1", "1.6.0-1");
         // cmp_versioning("1.11.0.git.20200404-1", "1.11.0+20200830-1");
         cmp_versioning("0.17.0+r8+gc41db5f1-1", "0.17.0+r157+g584760cf-1");
+        cmp_versioning("2.2.3", "10e");
+        cmp_versioning("e.2.3", "1.2.3");
     }
 
     fn cmp_versioning(a: &str, b: &str) {

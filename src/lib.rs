@@ -103,9 +103,10 @@ impl SemVer {
         }
     }
 
-    /// A lossy conversion from `SemVer` to [`Version`](struct.Version.html).
+    /// A lossless conversion from `SemVer` to [`Version`](struct.Version.html).
     ///
-    /// **Note:** Drops `SemVer` metadata!
+    /// **Note:** Unlike `SemVer`, `Version` expects its metadata before the
+    /// prerelease. For instance:
     ///
     /// ```
     /// use versions::SemVer;
@@ -113,7 +114,7 @@ impl SemVer {
     /// let orig = "1.2.3-r1+git123";
     /// let ver = SemVer::new(orig).unwrap().to_version();
     ///
-    /// assert_eq!("1.2.3-r1", format!("{}", ver));
+    /// assert_eq!("1.2.3+git123-r1", format!("{}", ver));
     /// ```
     pub fn to_version(&self) -> Version {
         let chunks = Chunks(vec![
@@ -125,6 +126,7 @@ impl SemVer {
         Version {
             epoch: None,
             chunks,
+            meta: self.meta.clone(),
             release: self.pre_rel.clone(),
         }
     }
@@ -288,15 +290,17 @@ impl Ord for SemVer {
 
 impl fmt::Display for SemVer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ma = self.major;
-        let mi = self.minor;
-        let pa = self.patch;
-        match (&self.pre_rel, &self.meta) {
-            (None, None) => write!(f, "{}.{}.{}", ma, mi, pa),
-            (Some(p), None) => write!(f, "{}.{}.{}-{}", ma, mi, pa, p),
-            (None, Some(m)) => write!(f, "{}.{}.{}+{}", ma, mi, pa, m),
-            (Some(p), Some(m)) => write!(f, "{}.{}.{}-{}+{}", ma, mi, pa, p, m),
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)?;
+
+        if let Some(p) = &self.pre_rel {
+            write!(f, "-{}", p)?;
         }
+
+        if let Some(m) = &self.meta {
+            write!(f, "+{}", m)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -331,6 +335,7 @@ impl fmt::Display for SemVer {
 pub struct Version {
     pub epoch: Option<u32>,
     pub chunks: Chunks,
+    pub meta: Option<Chunks>,
     pub release: Option<Chunks>,
 }
 
@@ -446,10 +451,12 @@ impl Version {
         let (i, epoch) = opt(Version::epoch)(i)?;
         let (i, chunks) = Chunks::parse(i)?;
         let (i, release) = opt(Chunks::pre_rel)(i)?;
+        let meta = None;
 
         let v = Version {
             epoch,
             chunks,
+            meta,
             release,
         };
 
@@ -489,12 +496,21 @@ impl Ord for Version {
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match (&self.epoch, &self.release) {
-            (None, None) => write!(f, "{}", self.chunks),
-            (Some(e), None) => write!(f, "{}:{}", e, self.chunks),
-            (None, Some(r)) => write!(f, "{}-{}", self.chunks, r),
-            (Some(e), Some(r)) => write!(f, "{}:{}-{}", e, self.chunks, r),
+        if let Some(e) = self.epoch {
+            write!(f, "{}:", e)?;
         }
+
+        write!(f, "{}", self.chunks)?;
+
+        if let Some(m) = &self.meta {
+            write!(f, "+{}", m)?;
+        }
+
+        if let Some(r) = &self.release {
+            write!(f, "-{}", r)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -608,13 +624,6 @@ impl Mess {
             value(Sep::Underscore, char('_')),
         ))(i)
     }
-
-    fn pretty(&self) -> String {
-        let node = self.chunks.iter().join(".");
-        let next = self.next.as_ref().map(|(sep, m)| format!("{}{}", sep, m));
-
-        node + &next.unwrap_or_else(|| "".to_string())
-    }
 }
 
 impl PartialOrd for Mess {
@@ -640,7 +649,13 @@ impl Ord for Mess {
 
 impl fmt::Display for Mess {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.pretty())
+        write!(f, "{}", self.chunks.iter().join("."))?;
+
+        if let Some((sep, m)) = &self.next {
+            write!(f, "{}{}", sep, m)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -960,8 +975,10 @@ impl Ord for Chunk {
 
 impl fmt::Display for Chunk {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s: String = self.0.iter().map(|u| format!("{}", u)).collect();
-        write!(f, "{}", s)
+        for u in &self.0 {
+            write!(f, "{}", u)?;
+        }
+        Ok(())
     }
 }
 

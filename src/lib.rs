@@ -450,8 +450,8 @@ impl Version {
     fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
         let (i, chunks) = Chunks::parse(i)?;
+        let (i, meta) = opt(Chunks::meta)(i)?;
         let (i, release) = opt(Chunks::pre_rel)(i)?;
-        let meta = None;
 
         let v = Version {
             epoch,
@@ -1189,6 +1189,7 @@ mod tests {
             "7.1p1-1",
             "20150826-1",
             "1:0.10.16-3",
+            "1.11.0+20200830-1",
         ];
 
         for s in goods {

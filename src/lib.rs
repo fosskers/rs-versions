@@ -838,8 +838,8 @@ impl Chunk {
     /// assert_eq!(None, v.single_digit());
     /// ```
     pub fn single_digit(&self) -> Option<u32> {
-        match self.0.first() {
-            Some(Unit::Digits(n)) if self.0.len() == 1 => Some(*n),
+        match self.0.as_slice() {
+            [Unit::Digits(n)] => Some(*n),
             _ => None,
         }
     }
@@ -1215,6 +1215,7 @@ mod tests {
             "1.6.0a+2014+m872b87e73dfb-1",
             "0.17.0+r8+gc41db5f1-1",
             "0.17.0+r157+g584760cf-1",
+            "1.002.3+r003",
         ];
 
         for s in messes {

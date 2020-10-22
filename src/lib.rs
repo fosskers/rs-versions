@@ -39,7 +39,7 @@
 //! [version]: struct.Version.html
 //! [mess]: struct.Mess.html
 
-#![doc(html_root_url = "https://docs.rs/versions/2.0.0-r1")]
+#![doc(html_root_url = "https://docs.rs/versions/2.0.0")]
 
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;

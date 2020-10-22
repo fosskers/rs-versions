@@ -903,6 +903,14 @@ impl Chunk {
         }
     }
 
+    /// Does this `Chunk` start with a letter?
+    fn is_lettered(&self) -> bool {
+        match self.0.as_slice() {
+            [Unit::Letters(_), ..] => true,
+            _ => false,
+        }
+    }
+
     fn parse(i: &str) -> IResult<&str, Chunk> {
         map(Chunk::units, Chunk)(i)
     }
@@ -986,7 +994,7 @@ impl fmt::Display for Chunk {
 ///
 /// Defined as a newtype wrapper so that we can define custom parser and trait
 /// methods.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Chunks(pub Vec<Chunk>);
 
 impl Chunks {
@@ -1003,6 +1011,39 @@ impl Chunks {
     fn meta(i: &str) -> IResult<&str, Chunks> {
         let (i, _) = char('+')(i)?;
         Chunks::parse(i)
+    }
+}
+
+impl PartialOrd for Chunks {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Chunks {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0
+            .iter()
+            .zip_longest(&other.0)
+            .filter_map(|eob| match eob {
+                // If all chunks up until this point were equal, but one side
+                // continues on with "lettered" sections, these are considered
+                // to be indicating a beta/prerelease, and thus are *less* than
+                // the side who already ran out of chunks.
+                Left(c) if c.is_lettered() => Some(Less),
+                Right(c) if c.is_lettered() => Some(Greater),
+                // If one side has run out of chunks to compare but the other
+                // hasn't, the other must be newer.
+                Left(_) => Some(Greater),
+                Right(_) => Some(Less),
+                // The usual case.
+                Both(a, b) => match a.cmp(b) {
+                    Equal => None,
+                    ord => Some(ord),
+                },
+            })
+            .next()
+            .unwrap_or(Equal)
     }
 }
 
@@ -1291,7 +1332,7 @@ mod tests {
         cmp_versioning("1.2.3r1-1", "2+0007-1");
         cmp_versioning("1.2-5", "1.2.3-1");
         cmp_versioning("1.6.0a+2014+m872b87e73dfb-1", "1.6.0-1");
-        // cmp_versioning("1.11.0.git.20200404-1", "1.11.0+20200830-1");
+        cmp_versioning("1.11.0.git.20200404-1", "1.11.0+20200830-1");
         cmp_versioning("0.17.0+r8+gc41db5f1-1", "0.17.0+r157+g584760cf-1");
         cmp_versioning("2.2.3", "10e");
         cmp_versioning("e.2.3", "1.2.3");

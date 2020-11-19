@@ -47,7 +47,7 @@ use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{alpha1, alphanumeric1, char, digit1};
 use nom::combinator::{map, map_res, opt, peek, recognize, value};
-use nom::multi::{many1, separated_nonempty_list};
+use nom::multi::{many1, separated_list1};
 use nom::IResult;
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
@@ -598,7 +598,7 @@ impl Mess {
     }
 
     fn parse(i: &str) -> IResult<&str, Mess> {
-        let (i, chunks) = separated_nonempty_list(char('.'), MChunk::parse)(i)?;
+        let (i, chunks) = separated_list1(char('.'), MChunk::parse)(i)?;
         let (i, next) = opt(Mess::next)(i)?;
 
         let m = Mess {
@@ -999,7 +999,7 @@ pub struct Chunks(pub Vec<Chunk>);
 
 impl Chunks {
     fn parse(i: &str) -> IResult<&str, Chunks> {
-        let (i, cs) = separated_nonempty_list(char('.'), Chunk::parse)(i)?;
+        let (i, cs) = separated_list1(char('.'), Chunk::parse)(i)?;
         Ok((i, Chunks(cs)))
     }
 
@@ -1158,7 +1158,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn good_semvers() {
+    fn official_semvers() {
         let goods = vec![
             "0.1.0",
             "1.2.3",
@@ -1168,6 +1168,18 @@ mod tests {
             "1.2.3+a1b2c3.1",
             "1.2.3-alpha.2+a1b2c3.1",
         ];
+
+        goods.iter().for_each(|s| {
+            assert_eq!(
+                Some(s.to_string()),
+                SemVer::new(s).map(|sv| format!("{}", sv))
+            )
+        });
+    }
+
+    #[test]
+    fn good_semvers() {
+        let goods = vec!["0.4.8-1", "7.42.13-4", "2.1.16102-2"];
 
         goods.iter().for_each(|s| {
             assert_eq!(
@@ -1231,6 +1243,8 @@ mod tests {
             "20150826-1",
             "1:0.10.16-3",
             "1.11.0+20200830-1",
+            "8.64.0.81-1",
+            "1:3.20-1",
         ];
 
         for s in goods {
@@ -1282,6 +1296,8 @@ mod tests {
             "0.17.0+r8+gc41db5f1-1",
             "0.17.0+r157+g584760cf-1",
             "1.002.3+r003",
+            "1.3.00.16851-1",
+            "5.2.458699.0906-1",
         ];
 
         for s in messes {
@@ -1325,6 +1341,23 @@ mod tests {
     }
 
     #[test]
+    fn equality() {
+        let vers = vec![
+            "1:3.20.1-1",
+            "1.3.00.25560-1",
+            "150_28-3",
+            "1.0.r15.g3fc772c-5",
+            "0.88-2",
+        ];
+
+        for v in vers {
+            let x = Versioning::new(v).unwrap();
+
+            assert_eq!(Equal, x.cmp(&x));
+        }
+    }
+
+    #[test]
     fn mixed_comparisons() {
         cmp_versioning("1.2.2r1-1", "1.2.3-1");
         cmp_versioning("1.2.3-1", "1.2.4r1-1");
@@ -1336,6 +1369,12 @@ mod tests {
         cmp_versioning("0.17.0+r8+gc41db5f1-1", "0.17.0+r157+g584760cf-1");
         cmp_versioning("2.2.3", "10e");
         cmp_versioning("e.2.3", "1.2.3");
+        cmp_versioning("0.4.8-1", "0.4.9-1");
+        cmp_versioning("2.1.16102-2", "2.1.17627-1");
+        cmp_versioning("8.64.0.81-1", "8.65.0.78-1");
+        cmp_versioning("1.3.00.16851-1", "1.3.00.25560-1");
+        cmp_versioning("1:3.20-1", "1:3.20.1-1");
+        cmp_versioning("5.2.458699.0906-1", "5.3.472687.1012-1");
     }
 
     fn cmp_versioning(a: &str, b: &str) {

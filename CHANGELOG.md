@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## Unreleased
+
+#### Changed
+
+- Updated to `nom-6.0`.
+
 ## 2.0.0 (2020-10-21)
 
 #### Changed

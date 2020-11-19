@@ -15,12 +15,10 @@
 //! # Usage
 //!
 //! If you're parsing several version numbers that don't follow a single scheme
-//! (say, as in system packages), then use the
-//! [`Versioning`](enum.Versioning.html) type and its parser
-//! [`Versioning::new`](enum.Versioning.html#method.new). Otherwise, each main
-//! type - [`SemVer`][semver], [`Version`][version], or [`Mess`][mess] - can be
-//! parsed on their own via the `new` method (e.g.
-//! [`SemVer::new`](struct.SemVer.html#method.new)).
+//! (say, as in system packages), then use the [`Versioning`] type and its
+//! parser [`Versioning::new`]. Otherwise, each main type - [`SemVer`],
+//! [`Version`], or [`Mess`] - can be parsed on their own via the `new` method
+//! (e.g. [`SemVer::new`]).
 //!
 //! # Examples
 //!
@@ -34,10 +32,6 @@
 //! assert!(evil.is_complex()); // It parsed as a `Mess`.
 //! assert!(good > evil);       // We can compare them anyway!
 //! ```
-//!
-//! [semver]: struct.SemVer.html
-//! [version]: struct.Version.html
-//! [mess]: struct.Mess.html
 
 #![doc(html_root_url = "https://docs.rs/versions/2.0.0")]
 
@@ -103,7 +97,7 @@ impl SemVer {
         }
     }
 
-    /// A lossless conversion from `SemVer` to [`Version`](struct.Version.html).
+    /// A lossless conversion from `SemVer` to [`Version`].
     ///
     /// **Note:** Unlike `SemVer`, `Version` expects its metadata before the
     /// prerelease. For instance:
@@ -131,7 +125,7 @@ impl SemVer {
         }
     }
 
-    /// A lossless conversion from `SemVer` to [`Mess`](struct.Mess.html).
+    /// A lossless conversion from `SemVer` to [`Mess`].
     ///
     /// ```
     /// use versions::SemVer;
@@ -190,7 +184,7 @@ impl SemVer {
         }
     }
 
-    /// Do our best to compare a `SemVer` and a [`Mess`](struct.Mess.html).
+    /// Do our best to compare a `SemVer` and a [`Mess`].
     ///
     /// If we're lucky, the `Mess` will be well-formed enough to pull out
     /// SemVer-like values at each position, yielding sane comparisons.
@@ -308,9 +302,9 @@ impl fmt::Display for SemVer {
 ///
 /// This is a *descriptive* scheme, meaning that it encapsulates the most
 /// common, unconscious patterns that developers use when assigning version
-/// numbers to their software. If not [`SemVer`](struct.SemVer.html), most
-/// version numbers found in the wild will parse as a `Version`. These generally
-/// conform to the `x.x.x-x` pattern, and may optionally have an *epoch*.
+/// numbers to their software. If not [`SemVer`], most version numbers found in
+/// the wild will parse as a `Version`. These generally conform to the `x.x.x-x`
+/// pattern, and may optionally have an *epoch*.
 ///
 /// # Epochs
 ///
@@ -349,7 +343,7 @@ impl Version {
     }
 
     /// Try to extract a position from the `Version` as a nice integer, as if it
-    /// were a [`SemVer`](struct.SemVer.html).
+    /// were a [`SemVer`].
     ///
     /// ```
     /// use versions::Version;
@@ -368,7 +362,7 @@ impl Version {
         self.chunks.0.get(n).and_then(Chunk::single_digit_lenient)
     }
 
-    /// A lossless conversion from `Version` to [`Mess`](struct.Mess.html).
+    /// A lossless conversion from `Version` to [`Mess`].
     ///
     /// ```
     /// use versions::Version;
@@ -516,27 +510,23 @@ impl fmt::Display for Version {
 
 /// A complex version number with no specific structure.
 ///
-/// Like [`Version`](struct.Version.html) this is a *descriptive* scheme, but it
-/// is based on examples of stupidly crafted, near-lawless version numbers used
-/// in the wild. Versions like this are a considerable burden to package
-/// management software.
+/// Like [`Version`] this is a *descriptive* scheme, but it is based on examples
+/// of stupidly crafted, near-lawless version numbers used in the wild. Versions
+/// like this are a considerable burden to package management software.
 ///
 /// With `Mess`, groups of letters/numbers are separated by a period, but can be
 /// further separated by the symbols `_-+:`.
 ///
-/// Unfortunately, [`Chunks`](struct.Chunks.html) cannot be used here, as some
-/// developers have numbers like `1.003.04` which make parsers quite sad.
+/// Unfortunately, [`Chunks`] cannot be used here, as some developers have
+/// numbers like `1.003.04` which make parsers quite sad.
 ///
-/// Some `Mess` values have a shape that is tantalizingly close to a
-/// [`SemVer`](struct.SemVer.html). Example: `1.6.0a+2014+m872b87e73dfb-1`. For
-/// values like these, we can extract the SemVer-compatible values out with
-/// [`nth`][nth].
+/// Some `Mess` values have a shape that is tantalizingly close to a [`SemVer`].
+/// Example: `1.6.0a+2014+m872b87e73dfb-1`. For values like these, we can
+/// extract the SemVer-compatible values out with [`Mess::nth`].
 ///
 /// In general this is not guaranteed to have well-defined ordering behaviour,
-/// but existing tests show sufficient consistency. [`nth`][nth] is used
+/// but existing tests show sufficient consistency. [`Mess::nth`] is used
 /// internally where appropriate to enhance accuracy.
-///
-/// [nth]: #method.nth.html
 ///
 /// # Examples
 ///
@@ -569,7 +559,7 @@ impl Mess {
     }
 
     /// Try to extract a position from the `Mess` as a nice integer, as if it
-    /// were a [`SemVer`](struct.SemVer.html).
+    /// were a [`SemVer`].
     ///
     /// ```
     /// use versions::Mess;
@@ -586,8 +576,7 @@ impl Mess {
         })
     }
 
-    /// Like [`nth`](#method.nth), but tries to parse out a full
-    /// [`Chunk`](struct.Chunk.html) instead.
+    /// Like [`Mess::nth`], but tries to parse out a full [`Chunk`] instead.
     fn nth_chunk(&self, x: usize) -> Option<Chunk> {
         let chunk = self.chunks.get(x)?.text();
         let (i, c) = Chunk::parse(chunk).ok()?;
@@ -659,7 +648,7 @@ impl fmt::Display for Mess {
     }
 }
 
-/// Possible values of a section of a [`Mess`](struct.Mess.html).
+/// Possible values of a section of a [`Mess`].
 ///
 /// A numeric value is extracted if it could be, alongside the original text it
 /// came from. This preserves both `Ord` and `Display` behaviour for versions
@@ -746,7 +735,7 @@ impl fmt::Display for MChunk {
 }
 
 /// Symbols that separate groups of digits/letters in a version number. Used in
-/// the [`Mess`](struct.Mess.html) type.
+/// the [`Mess`].
 ///
 /// These are:
 ///
@@ -780,8 +769,7 @@ impl fmt::Display for Sep {
 /// periods in the source.
 ///
 /// Please avoid using the `Unit::Letters` constructor yourself. Instead
-/// consider the [`from_string`](#method.from_string) method to verify the
-/// input.
+/// consider the [`Unit::from_string`] method to verify the input.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub enum Unit {
     Digits(u32),
@@ -829,8 +817,7 @@ impl fmt::Display for Unit {
 /// A logical unit of a version number.
 ///
 /// Can consist of multiple letters and numbers. Groups of these (i.e.
-/// [`Chunks`](type.Chunks.html)) are separated by periods to form a full
-/// version number.
+/// [`Chunks`]) are separated by periods to form a full version number.
 ///
 /// Defined as a newtype wrapper so that we can define custom parser and trait
 /// methods.
@@ -844,7 +831,7 @@ impl fmt::Display for Unit {
 pub struct Chunk(pub Vec<Unit>);
 
 impl Chunk {
-    /// If this `Chunk` is made up of a single [`Unit::Digits`](enum.Unit.html),
+    /// If this `Chunk` is made up of a single [`Unit::Digits`].
     /// then pull out the inner value.
     ///
     /// ```
@@ -866,8 +853,8 @@ impl Chunk {
         }
     }
 
-    /// Like [`single_digit`](#method.single_digit), but will grab the `u32`
-    /// even if there were more values in the `Chunk`.
+    /// Like [`Chunk::single_digit`], but will grab the `u32` even if there were
+    /// more values in the `Chunk`.
     ///
     /// ```
     /// use versions::{Chunk, Unit};
@@ -990,7 +977,7 @@ impl fmt::Display for Chunk {
     }
 }
 
-/// Multiple [`Chunk`](struct.Chunk.html) values.
+/// Multiple [`Chunk`] values.
 ///
 /// Defined as a newtype wrapper so that we can define custom parser and trait
 /// methods.
@@ -1079,9 +1066,7 @@ pub enum Versioning {
 
 impl Versioning {
     /// Create a `Versioning` by attempting to parse the input first as
-    /// [`SemVer`](struct.SemVer.html), then as a
-    /// [`Version`](struct.Version.html), and finally as a
-    /// [`Mess`](struct.Mess.html).
+    /// [`SemVer`], then as a [`Version`], and finally as a [`Mess`].
     pub fn new(s: &str) -> Option<Versioning> {
         SemVer::new(s)
             .map(Versioning::Ideal)
@@ -1089,7 +1074,7 @@ impl Versioning {
             .or_else(|| Mess::new(s).map(Versioning::Complex))
     }
 
-    /// A short-hand for detecting an inner [`SemVer`](struct.SemVer.html).
+    /// A short-hand for detecting an inner [`SemVer`].
     pub fn is_ideal(&self) -> bool {
         match self {
             Versioning::Ideal(_) => true,
@@ -1097,7 +1082,7 @@ impl Versioning {
         }
     }
 
-    /// A short-hand for detecting an inner [`Version`](struct.Version.html).
+    /// A short-hand for detecting an inner [`Version`].
     pub fn is_general(&self) -> bool {
         match self {
             Versioning::General(_) => true,
@@ -1105,7 +1090,7 @@ impl Versioning {
         }
     }
 
-    /// A short-hand for detecting an inner [`Mess`](struct.Mess.html).
+    /// A short-hand for detecting an inner [`Mess`].
     pub fn is_complex(&self) -> bool {
         match self {
             Versioning::Complex(_) => true,

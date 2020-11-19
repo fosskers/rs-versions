@@ -33,7 +33,7 @@
 //! assert!(good > evil);       // We can compare them anyway!
 //! ```
 
-#![doc(html_root_url = "https://docs.rs/versions/2.0.0")]
+#![doc(html_root_url = "https://docs.rs/versions/2.0.1")]
 
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;

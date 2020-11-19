@@ -1,10 +1,11 @@
 # `versions` Changelog
 
-## Unreleased
+## 2.0.1 (2020-11-19)
 
 #### Changed
 
 - Updated to `nom-6.0`.
+- Utilize new type linking in docstrings, thanks to the latest stable Rust.
 
 ## 2.0.0 (2020-10-21)
 

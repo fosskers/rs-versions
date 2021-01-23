@@ -33,7 +33,7 @@
 //! assert!(good > evil);       // We can compare them anyway!
 //! ```
 
-#![doc(html_root_url = "https://docs.rs/versions/2.0.1")]
+#![doc(html_root_url = "https://docs.rs/versions/2.0.2")]
 
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;
@@ -1154,24 +1154,24 @@ mod tests {
             "1.2.3-alpha.2+a1b2c3.1",
         ];
 
-        goods.iter().for_each(|s| {
+        for s in goods {
             assert_eq!(
                 Some(s.to_string()),
                 SemVer::new(s).map(|sv| format!("{}", sv))
             )
-        });
+        }
     }
 
     #[test]
     fn good_semvers() {
-        let goods = vec!["0.4.8-1", "7.42.13-4", "2.1.16102-2"];
+        let goods = vec!["0.4.8-1", "7.42.13-4", "2.1.16102-2", "2.2.1-b05"];
 
-        goods.iter().for_each(|s| {
+        for s in goods {
             assert_eq!(
                 Some(s.to_string()),
                 SemVer::new(s).map(|sv| format!("{}", sv))
             )
-        });
+        }
     }
 
     #[test]
@@ -1204,12 +1204,12 @@ mod tests {
             "1.0.0",
         ];
 
-        svs.iter().zip(&svs[1..]).for_each(|(a, b)| {
+        for (a, b) in svs.iter().zip(&svs[1..]) {
             let x = SemVer::new(a).unwrap();
             let y = SemVer::new(b).unwrap();
 
             assert!(x < y, "{} < {}", x, y);
-        });
+        }
     }
 
     #[test]

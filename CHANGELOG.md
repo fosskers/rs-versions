@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## 2.0.2 (2021-01-23)
+
+#### Changed
+
+- Updated to `itertools-0.10`.
+
 ## 2.0.1 (2020-11-19)
 
 #### Changed

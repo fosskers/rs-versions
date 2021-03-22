@@ -1,5 +1,12 @@
 # `versions` Changelog
 
+## 2.1.0 (2021-03-22)
+
+#### Added
+
+- `SemVer::parse`, `Version::parse`, and `Mess::parse` have been made `pub` so
+  that these parsers can be integrated into other general `nom` parsers.
+
 ## 2.0.2 (2021-01-23)
 
 #### Changed

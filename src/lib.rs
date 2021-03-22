@@ -39,7 +39,7 @@
 //! integrate the parsers used for the types in this crate via
 //! [`SemVer::parse`], [`Version::parse`], and [`Mess::parse`].
 
-#![doc(html_root_url = "https://docs.rs/versions/2.0.2")]
+#![doc(html_root_url = "https://docs.rs/versions/2.1.0")]
 
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;

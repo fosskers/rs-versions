@@ -226,7 +226,7 @@ impl SemVer {
         }
     }
 
-    fn parse(i: &str) -> IResult<&str, SemVer> {
+    pub fn parse(i: &str) -> IResult<&str, SemVer> {
         let (i, major) = parsers::unsigned(i)?;
         let (i, _) = char('.')(i)?;
         let (i, minor) = parsers::unsigned(i)?;
@@ -441,7 +441,7 @@ impl Version {
             .unwrap_or_else(|| self.to_mess().cmp(other))
     }
 
-    fn parse(i: &str) -> IResult<&str, Version> {
+    pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
         let (i, chunks) = Chunks::parse(i)?;
         let (i, meta) = opt(Chunks::meta)(i)?;
@@ -586,7 +586,7 @@ impl Mess {
         }
     }
 
-    fn parse(i: &str) -> IResult<&str, Mess> {
+    pub fn parse(i: &str) -> IResult<&str, Mess> {
         let (i, chunks) = separated_list1(char('.'), MChunk::parse)(i)?;
         let (i, next) = opt(Mess::next)(i)?;
 

@@ -32,6 +32,12 @@
 //! assert!(evil.is_complex()); // It parsed as a `Mess`.
 //! assert!(good > evil);       // We can compare them anyway!
 //! ```
+//!
+//! # Usage with `nom`
+//!
+//! In constructing your own [`nom`](https://lib.rs/nom) parsers, you can
+//! integrate the parsers used for the types in this crate via
+//! [`SemVer::parse`], [`Version::parse`], and [`Mess::parse`].
 
 #![doc(html_root_url = "https://docs.rs/versions/2.0.2")]
 
@@ -226,7 +232,9 @@ impl SemVer {
         }
     }
 
-    fn parse(i: &str) -> IResult<&str, SemVer> {
+    /// The raw `nom` parser for [`SemVer`]. Feel free to use this in
+    /// combination with other general `nom` parsers.
+    pub fn parse(i: &str) -> IResult<&str, SemVer> {
         let (i, major) = parsers::unsigned(i)?;
         let (i, _) = char('.')(i)?;
         let (i, minor) = parsers::unsigned(i)?;
@@ -441,7 +449,9 @@ impl Version {
             .unwrap_or_else(|| self.to_mess().cmp(other))
     }
 
-    fn parse(i: &str) -> IResult<&str, Version> {
+    /// The raw `nom` parser for [`Version`]. Feel free to use this in
+    /// combination with other general `nom` parsers.
+    pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
         let (i, chunks) = Chunks::parse(i)?;
         let (i, meta) = opt(Chunks::meta)(i)?;
@@ -586,7 +596,9 @@ impl Mess {
         }
     }
 
-    fn parse(i: &str) -> IResult<&str, Mess> {
+    /// The raw `nom` parser for [`Mess`]. Feel free to use this in combination
+    /// with other general `nom` parsers.
+    pub fn parse(i: &str) -> IResult<&str, Mess> {
         let (i, chunks) = separated_list1(char('.'), MChunk::parse)(i)?;
         let (i, next) = opt(Mess::next)(i)?;
 

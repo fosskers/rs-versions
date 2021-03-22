@@ -1175,6 +1175,20 @@ mod tests {
     }
 
     #[test]
+    fn semver_zeros() {
+        let pre_rel = Chunks(vec![Chunk(vec![
+            Unit::Letters("b".to_string()),
+            Unit::Digits(0),
+            Unit::Digits(5),
+        ])]);
+
+        assert_eq!(
+            Some(pre_rel),
+            SemVer::new("2.2.1-b05").and_then(|sv| sv.pre_rel)
+        );
+    }
+
+    #[test]
     fn bad_semvers() {
         let bads = vec![
             "1",

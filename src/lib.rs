@@ -83,7 +83,7 @@ mod parsers;
 /// ```
 ///
 /// [semver]: http://semver.org
-#[derive(Debug, Eq, Hash, Clone)]
+#[derive(Debug, Eq, Hash, Clone, Default)]
 pub struct SemVer {
     pub major: u32,
     pub minor: u32,
@@ -333,7 +333,7 @@ impl fmt::Display for SemVer {
 ///     assert!(Version::new(v).is_some());
 /// }
 /// ```
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Version {
     pub epoch: Option<u32>,
     pub chunks: Chunks,
@@ -553,7 +553,7 @@ impl fmt::Display for Version {
 /// assert!(v.is_none());
 /// assert_eq!(Some(mess.to_string()), m.map(|v| format!("{}", v)));
 /// ```
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Mess {
     pub chunks: Vec<MChunk>,
     pub next: Option<(Sep, Box<Mess>)>,
@@ -993,7 +993,7 @@ impl fmt::Display for Chunk {
 ///
 /// Defined as a newtype wrapper so that we can define custom parser and trait
 /// methods.
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Chunks(pub Vec<Chunk>);
 
 impl Chunks {
@@ -1147,6 +1147,12 @@ impl fmt::Display for Versioning {
             Versioning::General(v) => write!(f, "{}", v),
             Versioning::Complex(m) => write!(f, "{}", m),
         }
+    }
+}
+
+impl Default for Versioning {
+    fn default() -> Self {
+        Self::Ideal(SemVer::default())
     }
 }
 

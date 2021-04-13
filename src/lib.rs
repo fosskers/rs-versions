@@ -38,8 +38,13 @@
 //! In constructing your own [`nom`](https://lib.rs/nom) parsers, you can
 //! integrate the parsers used for the types in this crate via
 //! [`SemVer::parse`], [`Version::parse`], and [`Mess::parse`].
+//!
+//! ### Features
+//!
+//! You can enable [`Serde`](https://serde.rs/) support for serialization and
+//! deserialization with the `serde` feature.
 
-#![doc(html_root_url = "https://docs.rs/versions/2.1.0")]
+#![doc(html_root_url = "https://docs.rs/versions/2.2.0")]
 
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;

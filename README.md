@@ -32,3 +32,8 @@ assert!(good.is_ideal());   // It parsed as a `SemVer`.
 assert!(evil.is_complex()); // It parsed as a `Mess`.
 assert!(good > evil);       // We can compare them anyway!
 ```
+
+### Features
+
+You can enable [`Serde`](https://serde.rs/) support for serialization and
+deserialization with the `serde` feature.

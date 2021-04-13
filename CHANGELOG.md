@@ -1,5 +1,14 @@
 # `versions` Changelog
 
+## 2.2.0 (2021-04-13)
+
+#### Added
+
+- [`Serde`](https://serde.rs/) support through the `serde` feature.
+- `Versioning::nth` has been added.
+- `Default` has been derived on `Versioning`, `SemVer`, `Version`, `Mess` and `Chunks`
+  so that it's possible to initialize as a struct's field.
+
 ## 2.1.0 (2021-03-22)
 
 #### Added

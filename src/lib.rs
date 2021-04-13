@@ -49,6 +49,8 @@ use nom::character::complete::{alpha1, alphanumeric1, char, digit1};
 use nom::combinator::{map, map_res, opt, peek, recognize, value};
 use nom::multi::{many1, separated_list1};
 use nom::IResult;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::fmt;
@@ -83,6 +85,7 @@ mod parsers;
 /// ```
 ///
 /// [semver]: http://semver.org
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Eq, Hash, Clone, Default)]
 pub struct SemVer {
     pub major: u32,
@@ -333,6 +336,7 @@ impl fmt::Display for SemVer {
 ///     assert!(Version::new(v).is_some());
 /// }
 /// ```
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Version {
     pub epoch: Option<u32>,
@@ -553,6 +557,7 @@ impl fmt::Display for Version {
 /// assert!(v.is_none());
 /// assert_eq!(Some(mess.to_string()), m.map(|v| format!("{}", v)));
 /// ```
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Mess {
     pub chunks: Vec<MChunk>,
@@ -665,6 +670,7 @@ impl fmt::Display for Mess {
 /// A numeric value is extracted if it could be, alongside the original text it
 /// came from. This preserves both `Ord` and `Display` behaviour for versions
 /// like `1.003.0`.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum MChunk {
     /// A nice numeric value.
@@ -755,6 +761,7 @@ impl fmt::Display for MChunk {
 /// - A hyphen (-).
 /// - A plus (+). Stop using this outside of metadata if you are. Example: `10.2+0.93+1-1`
 /// - An underscore (_). Stop using this if you are.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Sep {
     Colon,
@@ -782,6 +789,7 @@ impl fmt::Display for Sep {
 ///
 /// Please avoid using the `Unit::Letters` constructor yourself. Instead
 /// consider the [`Unit::from_string`] method to verify the input.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub enum Unit {
     Digits(u32),
@@ -839,6 +847,7 @@ impl fmt::Display for Unit {
 /// - `r3`
 /// - `0rc1`
 /// - `20150826`
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Chunk(pub Vec<Unit>);
 
@@ -993,6 +1002,7 @@ impl fmt::Display for Chunk {
 ///
 /// Defined as a newtype wrapper so that we can define custom parser and trait
 /// methods.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Chunks(pub Vec<Chunk>);
 
@@ -1069,6 +1079,7 @@ impl fmt::Display for Chunks {
 /// assert!(b.is_general());
 /// assert!(c.is_complex());
 /// ```
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Versioning {
     Ideal(SemVer),

@@ -1109,7 +1109,40 @@ impl Versioning {
             _ => false,
         }
     }
+
+    /// Try to extract a position from the `Versioning` as a nice integer, as if it
+    /// were a [`SemVer`].
+    ///
+    /// ```
+    /// use versions::Versioning;
+    ///
+    /// let semver = Versioning::new("1.2.3-r1+git123").unwrap();
+    /// assert!(semver.is_ideal());
+    /// assert_eq!(Some(1), semver.nth(0));
+    /// assert_eq!(Some(2), semver.nth(1));
+    /// assert_eq!(Some(3), semver.nth(2));
+    ///
+    /// let version = Versioning::new("1:2.a.4.5.6.7-r1").unwrap();
+    /// assert!(version.is_general());
+    /// assert_eq!(Some(2), version.nth(0));
+    /// assert_eq!(None, version.nth(1));
+    /// assert_eq!(Some(4), version.nth(2));
+    ///
+    /// let mess = Versioning::new("1.6a.0+2014+m872b87e73dfb-1").unwrap();
+    /// assert!(mess.is_complex());
+    /// assert_eq!(Some(1), mess.nth(0));
+    /// assert_eq!(None, mess.nth(1));
+    /// assert_eq!(Some(0), mess.nth(2));
+    /// ```
+    pub fn nth(&self, n: usize) -> Option<u32> {
+        match self {
+            Versioning::Ideal(s) => s.to_version().nth(n),
+            Versioning::General(v) => v.nth(n),
+            Versioning::Complex(m) => m.nth(n),
+        }
+    }
 }
+
 impl PartialOrd for Versioning {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))

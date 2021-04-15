@@ -434,7 +434,7 @@ impl Version {
     /// the main parts of each version now.
     fn cmp_mess_continued(&self, other: &Mess) -> Ordering {
         (0..)
-            .filter_map(
+            .find_map(
                 |n| match self.nth(n).and_then(|x| other.nth(n).map(|y| x.cmp(&y))) {
                     // Sane values can't be extracted from one or both of the
                     // arguments.
@@ -445,7 +445,6 @@ impl Version {
                     Some(Equal) => None,
                 },
             )
-            .next()
             .unwrap_or_else(|| self.to_mess().cmp(other))
     }
 
@@ -950,7 +949,7 @@ impl Ord for Chunk {
         self.0
             .iter()
             .zip_longest(&other.0)
-            .filter_map(|eob| match eob {
+            .find_map(|eob| match eob {
                 // Different from the `Ord` instance of `Chunks`, if we've
                 // iterated this far and one side has fewer chunks, it must be
                 // the "greater" version. A Chunk break only occurs in a switch
@@ -975,7 +974,6 @@ impl Ord for Chunk {
                 Both(Unit::Digits(_), Unit::Letters(_)) => Some(Less),
                 Both(Unit::Letters(_), Unit::Digits(_)) => Some(Greater),
             })
-            .next()
             .unwrap_or(Equal)
     }
 }
@@ -1024,7 +1022,7 @@ impl Ord for Chunks {
         self.0
             .iter()
             .zip_longest(&other.0)
-            .filter_map(|eob| match eob {
+            .find_map(|eob| match eob {
                 // If all chunks up until this point were equal, but one side
                 // continues on with "lettered" sections, these are considered
                 // to be indicating a beta/prerelease, and thus are *less* than
@@ -1041,7 +1039,6 @@ impl Ord for Chunks {
                     ord => Some(ord),
                 },
             })
-            .next()
             .unwrap_or(Equal)
     }
 }

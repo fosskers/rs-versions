@@ -2,8 +2,9 @@
 
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::character::complete::digit1;
-use nom::combinator::map_res;
+use nom::character::complete::{alphanumeric1, char, digit1};
+use nom::combinator::{map, map_res};
+use nom::multi::many1;
 use nom::IResult;
 
 /// Parse an unsigned integer.
@@ -23,4 +24,15 @@ fn unsigned_test() {
         Ok(_) => panic!("Parsed 06, but gave wrong output"),
         Err(_) => panic!("Couldn't parse 06"),
     }
+}
+
+/// Parse metadata. As of SemVer 2.0, this can contain alphanumeric characters
+/// as well as hyphens.
+pub fn meta(i: &str) -> IResult<&str, String> {
+    let (i, _) = char('+')(i)?;
+    // TODO Surely there is a better way to do this that avoids the Vec.
+    map(
+        many1(alt((alphanumeric1, tag("-"), tag(".")))),
+        |v: Vec<&str>| v.into_iter().collect(),
+    )(i)
 }

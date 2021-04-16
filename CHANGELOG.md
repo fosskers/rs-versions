@@ -1,13 +1,34 @@
 # `versions` Changelog
 
-## 2.2.0 (2021-04-13)
+## Unreleased
+
+This release brings `versions` in line with version `2.0.0` of the SemVer spec.
+The main addition to the spec is the allowance of hyphens in both the prerelease
+and metadata sections. As such, **certain versions like 1.2.3+1-1 which
+previously would not parse as SemVer now do.**
+
+To accomodate this and other small spec updates, the SemVer and Version types
+have received breaking changes here.
 
 #### Added
 
-- [`Serde`](https://serde.rs/) support through the `serde` feature.
-- `Versioning::nth` has been added.
-- `Default` has been derived on `Versioning`, `SemVer`, `Version`, `Mess` and `Chunks`
-  so that it's possible to initialize as a struct's field.
+- [`Serde`](https://serde.rs/) support through the optional `serde` feature.
+- `Versioning::nth` to pick out certain fields of a generically parsed version.
+- `Default` is now derived on `Versioning`, `SemVer`, `Version`, `Mess` and
+  `Chunks` so that it's possible to initialize as a struct's field.
+
+#### Changed
+
+- **Breaking:** `SemVer::meta` and `Version::meta` no longer parse as `Chunks`
+  but as vanilla `String`s.
+- **Breaking:** As a semantic change, `Version`s now expect metadata to come
+  **after** any prerelease, just as with `SemVer`. `Version` is now thus fairly
+  similar to `SemVer`, except that is allows letters in more permissive
+  positions.
+
+#### Fixed
+
+- Two small bugs involving `SemVer`/`Version` comparisons.
 
 ## 2.1.0 (2021-03-22)
 

@@ -98,8 +98,8 @@ pub struct SemVer {
     pub patch: u32,
     /// `Some` implies that the inner `Vec` of the `Chunks` is not empty.
     pub pre_rel: Option<Chunks>,
-    /// `Some` implies that the inner `Vec` of the `Chunks` is not empty.
-    pub meta: Option<Chunks>,
+    /// `Some` implies that the inner `String` is not empty.
+    pub meta: Option<String>,
 }
 
 impl SemVer {
@@ -158,7 +158,7 @@ impl SemVer {
         let next = self.pre_rel.as_ref().map(|pr| {
             let chunks = pr.0.iter().filter_map(|c| c.mchunk()).collect();
             let next = self.meta.as_ref().map(|meta| {
-                let chunks = meta.0.iter().filter_map(|m| m.mchunk()).collect();
+                let chunks = vec![MChunk::Plain(meta.clone())];
                 (Sep::Plus, Box::new(Mess { chunks, next: None }))
             });
 
@@ -178,7 +178,7 @@ impl SemVer {
         // A `Version` with a non-zero epoch value is automatically greater than
         // any `SemVer`.
         match other.epoch {
-            Some(n) if n > 0 => Greater,
+            Some(n) if n > 0 => Less,
             _ => match other.nth_lenient(0).map(|x| self.major.cmp(&x)) {
                 None => Greater,
                 Some(Greater) => Greater,
@@ -191,7 +191,14 @@ impl SemVer {
                         None => Greater,
                         Some(Greater) => Greater,
                         Some(Less) => Less,
-                        Some(Equal) => self.pre_rel.cmp(&other.release),
+                        Some(Equal) => match other.chunks.0.get(3).as_ref().map(|c| c.0.as_slice())
+                        {
+                            // 1.2.3 > 1.2.3.git
+                            Some([Unit::Letters(_), ..]) => Greater,
+                            // 1.2.3 < 1.2.3.0
+                            Some([Unit::Digits(_), ..]) => Less,
+                            Some([]) | None => self.pre_rel.cmp(&other.release),
+                        },
                     },
                 },
             },
@@ -249,7 +256,7 @@ impl SemVer {
         let (i, _) = char('.')(i)?;
         let (i, patch) = parsers::unsigned(i)?;
         let (i, pre_rel) = opt(Chunks::pre_rel)(i)?;
-        let (i, meta) = opt(Chunks::meta)(i)?;
+        let (i, meta) = opt(parsers::meta)(i)?;
 
         let sv = SemVer {
             major,
@@ -346,7 +353,7 @@ impl fmt::Display for SemVer {
 pub struct Version {
     pub epoch: Option<u32>,
     pub chunks: Chunks,
-    pub meta: Option<Chunks>,
+    pub meta: Option<String>,
     pub release: Option<Chunks>,
 }
 
@@ -443,7 +450,7 @@ impl Version {
     /// the main parts of each version now.
     fn cmp_mess_continued(&self, other: &Mess) -> Ordering {
         (0..)
-            .filter_map(
+            .find_map(
                 |n| match self.nth(n).and_then(|x| other.nth(n).map(|y| x.cmp(&y))) {
                     // Sane values can't be extracted from one or both of the
                     // arguments.
@@ -454,7 +461,6 @@ impl Version {
                     Some(Equal) => None,
                 },
             )
-            .next()
             .unwrap_or_else(|| self.to_mess().cmp(other))
     }
 
@@ -462,9 +468,9 @@ impl Version {
     /// combination with other general `nom` parsers.
     pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
-        let (i, chunks) = Chunks::parse(i)?;
-        let (i, meta) = opt(Chunks::meta)(i)?;
+        let (i, chunks) = Chunks::parse(&Unit::string, i)?;
         let (i, release) = opt(Chunks::pre_rel)(i)?;
+        let (i, meta) = opt(parsers::meta)(i)?;
 
         let v = Version {
             epoch,
@@ -599,7 +605,7 @@ impl Mess {
     /// Like [`Mess::nth`], but tries to parse out a full [`Chunk`] instead.
     fn nth_chunk(&self, x: usize) -> Option<Chunk> {
         let chunk = self.chunks.get(x)?.text();
-        let (i, c) = Chunk::parse(chunk).ok()?;
+        let (i, c) = Chunk::parse(&Unit::string, chunk).ok()?;
         match i {
             "" => Some(c),
             _ => None,
@@ -806,23 +812,33 @@ impl Unit {
     // stable Rust.
     /// Smart constructor for a `Unit` made of letters.
     pub fn from_string(s: String) -> Option<Unit> {
-        if s.chars().all(|c| c.is_ascii_alphabetic()) {
-            Some(Unit::Letters(s))
-        } else {
-            None
-        }
+        s.chars()
+            .all(|c| c.is_ascii_alphabetic())
+            .then(|| Unit::Letters(s))
     }
 
-    fn parse(i: &str) -> IResult<&str, Unit> {
-        alt((Unit::digits, Unit::string))(i)
+    fn parse<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Unit>
+    where
+        F: Fn(&'b str) -> IResult<&'b str, Unit>,
+    {
+        alt((Unit::digits, f))(i)
     }
 
     fn digits(i: &str) -> IResult<&str, Unit> {
         parsers::unsigned(i).map(|(i, x)| (i, Unit::Digits(x)))
     }
 
+    /// Parsing `Unit`s that belong to the main section of a `Version`.
     fn string(i: &str) -> IResult<&str, Unit> {
         alpha1(i).map(|(i, s)| (i, Unit::Letters(s.to_string())))
+    }
+
+    /// Parsing `Unit`s that belong to the prerelease section.
+    fn string_with_hyphens(i: &str) -> IResult<&str, Unit> {
+        many1(alt((alpha1, tag("-"))))(i).map(|(i, v)| {
+            let string = v.into_iter().collect();
+            (i, Unit::Letters(string))
+        })
     }
 
     fn single_zero(i: &str) -> IResult<&str, Unit> {
@@ -924,24 +940,33 @@ impl Chunk {
         }
     }
 
-    fn parse(i: &str) -> IResult<&str, Chunk> {
-        map(Chunk::units, Chunk)(i)
+    fn parse<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Chunk>
+    where
+        F: Fn(&'b str) -> IResult<&'b str, Unit>,
+    {
+        Chunk::units(f, i).map(|(i, v)| (i, Chunk(v)))
     }
 
     /// Handling `0` is a bit tricky. We can't allow runs of zeros in a chunk,
     /// since a version like `1.000.1` would parse as `1.0.1`.
-    fn units(i: &str) -> IResult<&str, Vec<Unit>> {
+    fn units<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Vec<Unit>>
+    where
+        F: Fn(&'b str) -> IResult<&'b str, Unit>,
+    {
         alt((
-            Chunk::zero_with_letters,
+            |i| Chunk::zero_with_letters(f, i),
             map(Unit::single_zero, |u| vec![u]),
-            many1(Unit::parse),
+            many1(|i| Unit::parse(f, i)),
         ))(i)
     }
 
-    fn zero_with_letters(i: &str) -> IResult<&str, Vec<Unit>> {
+    fn zero_with_letters<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Vec<Unit>>
+    where
+        F: Fn(&'b str) -> IResult<&'b str, Unit>,
+    {
         let (i, z) = Unit::single_zero(i)?;
         let (i, s) = Unit::string(i)?;
-        let (i, c) = opt(Chunk::units)(i)?;
+        let (i, c) = opt(|i| Chunk::units(f, i))(i)?;
 
         let mut us = vec![z, s];
         if let Some(x) = c {
@@ -964,7 +989,7 @@ impl Ord for Chunk {
         self.0
             .iter()
             .zip_longest(&other.0)
-            .filter_map(|eob| match eob {
+            .find_map(|eob| match eob {
                 // Different from the `Ord` instance of `Chunks`, if we've
                 // iterated this far and one side has fewer chunks, it must be
                 // the "greater" version. A Chunk break only occurs in a switch
@@ -989,7 +1014,6 @@ impl Ord for Chunk {
                 Both(Unit::Digits(_), Unit::Letters(_)) => Some(Less),
                 Both(Unit::Letters(_), Unit::Digits(_)) => Some(Greater),
             })
-            .next()
             .unwrap_or(Equal)
     }
 }
@@ -1012,19 +1036,17 @@ impl fmt::Display for Chunk {
 pub struct Chunks(pub Vec<Chunk>);
 
 impl Chunks {
-    fn parse(i: &str) -> IResult<&str, Chunks> {
-        let (i, cs) = separated_list1(char('.'), Chunk::parse)(i)?;
+    fn parse<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Chunks>
+    where
+        F: Fn(&'b str) -> IResult<&'b str, Unit>,
+    {
+        let (i, cs) = separated_list1(char('.'), |i| Chunk::parse(f, i))(i)?;
         Ok((i, Chunks(cs)))
     }
 
     fn pre_rel(i: &str) -> IResult<&str, Chunks> {
         let (i, _) = char('-')(i)?;
-        Chunks::parse(i)
-    }
-
-    fn meta(i: &str) -> IResult<&str, Chunks> {
-        let (i, _) = char('+')(i)?;
-        Chunks::parse(i)
+        Chunks::parse(&Unit::string_with_hyphens, i)
     }
 }
 
@@ -1039,7 +1061,7 @@ impl Ord for Chunks {
         self.0
             .iter()
             .zip_longest(&other.0)
-            .filter_map(|eob| match eob {
+            .find_map(|eob| match eob {
                 // If all chunks up until this point were equal, but one side
                 // continues on with "lettered" sections, these are considered
                 // to be indicating a beta/prerelease, and thus are *less* than
@@ -1056,7 +1078,6 @@ impl Ord for Chunks {
                     ord => Some(ord),
                 },
             })
-            .next()
             .unwrap_or(Equal)
     }
 }
@@ -1219,6 +1240,9 @@ mod tests {
             "1.2.3-alpha.2",
             "1.2.3+a1b2c3.1",
             "1.2.3-alpha.2+a1b2c3.1",
+            "1.0.0-x-y-z.-",
+            "1.0.0-alpha+001",
+            "1.0.0+21AF26D3---117B344092BD",
         ];
 
         for s in goods {
@@ -1231,7 +1255,13 @@ mod tests {
 
     #[test]
     fn good_semvers() {
-        let goods = vec!["0.4.8-1", "7.42.13-4", "2.1.16102-2", "2.2.1-b05"];
+        let goods = vec![
+            "0.4.8-1",
+            "7.42.13-4",
+            "2.1.16102-2",
+            "2.2.1-b05",
+            "1.11.0+20200830-1",
+        ];
 
         for s in goods {
             assert_eq!(
@@ -1260,7 +1290,6 @@ mod tests {
         let bads = vec![
             "1",
             "1.2",
-            "1.2.3+a1b2bc3.1-alpha.2",
             "a.b.c",
             "1.01.1",
             "1.2.3+a1b!2c3.1",
@@ -1308,7 +1337,6 @@ mod tests {
             "7.1p1-1",
             "20150826-1",
             "1:0.10.16-3",
-            "1.11.0+20200830-1",
             "8.64.0.81-1",
             "1:3.20-1",
         ];
@@ -1425,6 +1453,8 @@ mod tests {
 
     #[test]
     fn mixed_comparisons() {
+        cmp_versioning("1.2.3", "1.2.3.0");
+        cmp_versioning("1.2.3.git", "1.2.3");
         cmp_versioning("1.2.2r1-1", "1.2.3-1");
         cmp_versioning("1.2.3-1", "1.2.4r1-1");
         cmp_versioning("1.2.3-1", "2+0007-1");
@@ -1441,6 +1471,7 @@ mod tests {
         cmp_versioning("1.3.00.16851-1", "1.3.00.25560-1");
         cmp_versioning("1:3.20-1", "1:3.20.1-1");
         cmp_versioning("5.2.458699.0906-1", "5.3.472687.1012-1");
+        cmp_versioning("1.2.3", "1:1.2.0");
     }
 
     fn cmp_versioning(a: &str, b: &str) {

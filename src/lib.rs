@@ -774,6 +774,13 @@ impl fmt::Display for Sep {
     }
 }
 
+/// Whether to allow or forbid the presence of hyphens when parsing `Chunk`s.
+#[derive(Clone)]
+enum HyphenMode {
+    Forbid,
+    Allow,
+}
+
 /// A single unit of a version number. May be digits or a string of characters.
 ///
 /// Groups of these are called `Chunk`s, and are the identifiers separated by
@@ -797,11 +804,11 @@ impl Unit {
             .then(|| Unit::Letters(s))
     }
 
-    fn parse<F>(str_parse: F, i: &str) -> IResult<&str, Unit>
-    where
-        F: FnMut(&str) -> IResult<&str, Unit>,
-    {
-        alt((Unit::digits, str_parse))(i)
+    fn parse<'a, 'b>(mode: &'a HyphenMode, i: &'b str) -> IResult<&'b str, Unit> {
+        match mode {
+            HyphenMode::Forbid => alt((Unit::digits, Unit::string))(i),
+            HyphenMode::Allow => alt((Unit::digits, Unit::string_with_hyphens))(i),
+        }
     }
 
     fn digits(i: &str) -> IResult<&str, Unit> {
@@ -920,30 +927,23 @@ impl Chunk {
     }
 
     fn parse(i: &str) -> IResult<&str, Chunk> {
-        Chunk::units(Unit::string, i).map(|(i, v)| (i, Chunk(v)))
+        Chunk::units(&HyphenMode::Forbid, i).map(|(i, v)| (i, Chunk(v)))
     }
 
     /// Handling `0` is a bit tricky. We can't allow runs of zeros in a chunk,
     /// since a version like `1.000.1` would parse as `1.0.1`.
-    fn units<F>(str_parse: F, i: &str) -> IResult<&str, Vec<Unit>>
-    where
-        F: FnMut(&str) -> IResult<&str, Unit>,
-    {
+    fn units<'a, 'b>(mode: &'a HyphenMode, i: &'b str) -> IResult<&'b str, Vec<Unit>> {
         alt((
-            |i| Chunk::zero_with_letters(str_parse, i),
+            |i| Chunk::zero_with_letters(mode, i),
             map(Unit::single_zero, |u| vec![u]),
-            many1(|i| Unit::parse(str_parse, i)),
+            many1(|i| Unit::parse(mode, i)),
         ))(i)
     }
 
-    fn zero_with_letters<F>(str_parse: F, i: &str) -> IResult<&str, Vec<Unit>>
-    where
-        F: FnMut(&str) -> IResult<&str, Unit>,
-    {
-        let mut foo = |i| Chunk::units(str_parse, i);
+    fn zero_with_letters<'a, 'b>(mode: &'a HyphenMode, i: &'b str) -> IResult<&'b str, Vec<Unit>> {
         let (i, z) = Unit::single_zero(i)?;
         let (i, s) = Unit::string(i)?;
-        let (i, c) = opt(foo)(i)?;
+        let (i, c) = opt(|i| Chunk::units(mode, i))(i)?;
 
         let mut us = vec![z, s];
         if let Some(x) = c {

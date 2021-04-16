@@ -1,11 +1,11 @@
 //! Reusable parsers for the `versions` library.
 
+use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{alphanumeric1, char, digit1};
 use nom::combinator::{map, map_res};
 use nom::multi::many1;
 use nom::IResult;
-use nom::{branch::alt, bytes::complete::take_while1, character::is_alphanumeric};
 
 /// Parse an unsigned integer.
 ///

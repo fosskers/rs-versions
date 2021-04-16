@@ -183,7 +183,14 @@ impl SemVer {
                         None => Greater,
                         Some(Greater) => Greater,
                         Some(Less) => Less,
-                        Some(Equal) => self.pre_rel.cmp(&other.release),
+                        Some(Equal) => match other.chunks.0.get(3).as_ref().map(|c| c.0.as_slice())
+                        {
+                            // 1.2.3 > 1.2.3.git
+                            Some([Unit::Letters(_), ..]) => Greater,
+                            // 1.2.3 < 1.2.3.0
+                            Some([Unit::Digits(_), ..]) => Less,
+                            Some([]) | None => self.pre_rel.cmp(&other.release),
+                        },
                     },
                 },
             },
@@ -1391,6 +1398,8 @@ mod tests {
 
     #[test]
     fn mixed_comparisons() {
+        cmp_versioning("1.2.3", "1.2.3.0");
+        cmp_versioning("1.2.3.git", "1.2.3");
         cmp_versioning("1.2.2r1-1", "1.2.3-1");
         cmp_versioning("1.2.3-1", "1.2.4r1-1");
         cmp_versioning("1.2.3-1", "2+0007-1");

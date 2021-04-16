@@ -44,7 +44,7 @@
 //! You can enable [`Serde`](https://serde.rs/) support for serialization and
 //! deserialization with the `serde` feature.
 
-#![doc(html_root_url = "https://docs.rs/versions/2.2.0")]
+#![doc(html_root_url = "https://docs.rs/versions/3.0.0")]
 
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;

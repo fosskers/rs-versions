@@ -1,14 +1,14 @@
 # `versions` Changelog
 
-## Unreleased
+## 3.0.0 (2021-04-16)
 
 This release brings `versions` in line with version `2.0.0` of the SemVer spec.
 The main addition to the spec is the allowance of hyphens in both the prerelease
 and metadata sections. As such, **certain versions like 1.2.3+1-1 which
 previously would not parse as SemVer now do.**
 
-To accomodate this and other small spec updates, the SemVer and Version types
-have received breaking changes here.
+To accomodate this and other small spec updates, the `SemVer` and `Version`
+types have received breaking changes here.
 
 #### Added
 

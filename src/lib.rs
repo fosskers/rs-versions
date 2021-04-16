@@ -90,8 +90,8 @@ pub struct SemVer {
     pub patch: u32,
     /// `Some` implies that the inner `Vec` of the `Chunks` is not empty.
     pub pre_rel: Option<Chunks>,
-    /// `Some` implies that the inner `Vec` of the `Chunks` is not empty.
-    pub meta: Option<Chunks>,
+    /// `Some` implies that the inner `String` is not empty.
+    pub meta: Option<String>,
 }
 
 impl SemVer {
@@ -150,7 +150,7 @@ impl SemVer {
         let next = self.pre_rel.as_ref().map(|pr| {
             let chunks = pr.0.iter().filter_map(|c| c.mchunk()).collect();
             let next = self.meta.as_ref().map(|meta| {
-                let chunks = meta.0.iter().filter_map(|m| m.mchunk()).collect();
+                let chunks = vec![MChunk::Plain(meta.clone())];
                 (Sep::Plus, Box::new(Mess { chunks, next: None }))
             });
 
@@ -241,7 +241,7 @@ impl SemVer {
         let (i, _) = char('.')(i)?;
         let (i, patch) = parsers::unsigned(i)?;
         let (i, pre_rel) = opt(Chunks::pre_rel)(i)?;
-        let (i, meta) = opt(Chunks::meta)(i)?;
+        let (i, meta) = opt(parsers::meta)(i)?;
 
         let sv = SemVer {
             major,
@@ -337,7 +337,7 @@ impl fmt::Display for SemVer {
 pub struct Version {
     pub epoch: Option<u32>,
     pub chunks: Chunks,
-    pub meta: Option<Chunks>,
+    pub meta: Option<String>,
     pub release: Option<Chunks>,
 }
 
@@ -453,8 +453,8 @@ impl Version {
     pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
         let (i, chunks) = Chunks::parse(i)?;
-        let (i, meta) = opt(Chunks::meta)(i)?;
         let (i, release) = opt(Chunks::pre_rel)(i)?;
+        let (i, meta) = opt(parsers::meta)(i)?;
 
         let v = Version {
             epoch,
@@ -1004,11 +1004,6 @@ impl Chunks {
         let (i, _) = char('-')(i)?;
         Chunks::parse(i)
     }
-
-    fn meta(i: &str) -> IResult<&str, Chunks> {
-        let (i, _) = char('+')(i)?;
-        Chunks::parse(i)
-    }
 }
 
 impl PartialOrd for Chunks {
@@ -1176,7 +1171,13 @@ mod tests {
 
     #[test]
     fn good_semvers() {
-        let goods = vec!["0.4.8-1", "7.42.13-4", "2.1.16102-2", "2.2.1-b05"];
+        let goods = vec![
+            "0.4.8-1",
+            "7.42.13-4",
+            "2.1.16102-2",
+            "2.2.1-b05",
+            "1.11.0+20200830-1",
+        ];
 
         for s in goods {
             assert_eq!(
@@ -1253,7 +1254,7 @@ mod tests {
             "7.1p1-1",
             "20150826-1",
             "1:0.10.16-3",
-            "1.11.0+20200830-1",
+            "1.11.0+20200830-1", // Should be a legal semver now.
             "8.64.0.81-1",
             "1:3.20-1",
         ];

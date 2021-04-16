@@ -452,7 +452,7 @@ impl Version {
     /// combination with other general `nom` parsers.
     pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
-        let (i, chunks) = Chunks::parse(i)?;
+        let (i, chunks) = Chunks::parse(&HyphenMode::Forbid, i)?;
         let (i, release) = opt(Chunks::pre_rel)(i)?;
         let (i, meta) = opt(parsers::meta)(i)?;
 
@@ -588,7 +588,7 @@ impl Mess {
     /// Like [`Mess::nth`], but tries to parse out a full [`Chunk`] instead.
     fn nth_chunk(&self, x: usize) -> Option<Chunk> {
         let chunk = self.chunks.get(x)?.text();
-        let (i, c) = Chunk::parse(chunk).ok()?;
+        let (i, c) = Chunk::parse(&HyphenMode::Forbid, chunk).ok()?;
         match i {
             "" => Some(c),
             _ => None,
@@ -926,8 +926,8 @@ impl Chunk {
         }
     }
 
-    fn parse(i: &str) -> IResult<&str, Chunk> {
-        Chunk::units(&HyphenMode::Forbid, i).map(|(i, v)| (i, Chunk(v)))
+    fn parse<'a, 'b>(mode: &'a HyphenMode, i: &'b str) -> IResult<&'b str, Chunk> {
+        Chunk::units(mode, i).map(|(i, v)| (i, Chunk(v)))
     }
 
     /// Handling `0` is a bit tricky. We can't allow runs of zeros in a chunk,
@@ -1012,14 +1012,14 @@ impl fmt::Display for Chunk {
 pub struct Chunks(pub Vec<Chunk>);
 
 impl Chunks {
-    fn parse(i: &str) -> IResult<&str, Chunks> {
-        let (i, cs) = separated_list1(char('.'), Chunk::parse)(i)?;
+    fn parse<'a, 'b>(mode: &'a HyphenMode, i: &'b str) -> IResult<&'b str, Chunks> {
+        let (i, cs) = separated_list1(char('.'), |i| Chunk::parse(mode, i))(i)?;
         Ok((i, Chunks(cs)))
     }
 
     fn pre_rel(i: &str) -> IResult<&str, Chunks> {
         let (i, _) = char('-')(i)?;
-        Chunks::parse(i)
+        Chunks::parse(&HyphenMode::Allow, i)
     }
 }
 

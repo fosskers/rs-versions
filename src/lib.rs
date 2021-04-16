@@ -39,7 +39,7 @@
 //! integrate the parsers used for the types in this crate via
 //! [`SemVer::parse`], [`Version::parse`], and [`Mess::parse`].
 //!
-//! ### Features
+//! # Features
 //!
 //! You can enable [`Serde`](https://serde.rs/) support for serialization and
 //! deserialization with the `serde` feature.
@@ -1173,7 +1173,10 @@ impl Versioning {
     /// ```
     pub fn nth(&self, n: usize) -> Option<u32> {
         match self {
-            Versioning::Ideal(s) => s.to_version().nth(n),
+            Versioning::Ideal(s) if n == 0 => Some(s.major),
+            Versioning::Ideal(s) if n == 1 => Some(s.minor),
+            Versioning::Ideal(s) if n == 2 => Some(s.patch),
+            Versioning::Ideal(_) => None,
             Versioning::General(v) => v.nth(n),
             Versioning::Complex(m) => m.nth(n),
         }

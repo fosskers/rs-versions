@@ -170,7 +170,7 @@ impl SemVer {
         // A `Version` with a non-zero epoch value is automatically greater than
         // any `SemVer`.
         match other.epoch {
-            Some(n) if n > 0 => Greater,
+            Some(n) if n > 0 => Less,
             _ => match other.nth_lenient(0).map(|x| self.major.cmp(&x)) {
                 None => Greater,
                 Some(Greater) => Greater,
@@ -1407,6 +1407,7 @@ mod tests {
         cmp_versioning("1.3.00.16851-1", "1.3.00.25560-1");
         cmp_versioning("1:3.20-1", "1:3.20.1-1");
         cmp_versioning("5.2.458699.0906-1", "5.3.472687.1012-1");
+        cmp_versioning("1.2.3", "1:1.2.0");
     }
 
     fn cmp_versioning(a: &str, b: &str) {

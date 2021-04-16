@@ -31,14 +31,8 @@ fn unsigned_test() {
 pub fn meta(i: &str) -> IResult<&str, String> {
     let (i, _) = char('+')(i)?;
     // TODO Surely there is a better way to do this that avoids the Vec.
-    // TODO Since I'm already using `tag` above, look into byte-based `take_while`.
     map(
         many1(alt((alphanumeric1, tag("-"), tag(".")))),
         |v: Vec<&str>| v.into_iter().collect(),
     )(i)
-
-    // map(
-    //     take_while1(|c| is_alphanumeric(c) || c == 0x2D),
-    //     |s: &str| s.to_owned(),
-    // )(i)
 }

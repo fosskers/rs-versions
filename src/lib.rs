@@ -452,7 +452,7 @@ impl Version {
     /// combination with other general `nom` parsers.
     pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
-        let (i, chunks) = Chunks::parse(&HyphenMode::Forbid, i)?;
+        let (i, chunks) = Chunks::parse(&Unit::string, i)?;
         let (i, release) = opt(Chunks::pre_rel)(i)?;
         let (i, meta) = opt(parsers::meta)(i)?;
 
@@ -588,7 +588,7 @@ impl Mess {
     /// Like [`Mess::nth`], but tries to parse out a full [`Chunk`] instead.
     fn nth_chunk(&self, x: usize) -> Option<Chunk> {
         let chunk = self.chunks.get(x)?.text();
-        let (i, c) = Chunk::parse(&HyphenMode::Forbid, chunk).ok()?;
+        let (i, c) = Chunk::parse(&Unit::string, chunk).ok()?;
         match i {
             "" => Some(c),
             _ => None,
@@ -774,13 +774,6 @@ impl fmt::Display for Sep {
     }
 }
 
-/// Whether to allow or forbid the presence of hyphens when parsing `Chunk`s.
-#[derive(Clone)]
-enum HyphenMode {
-    Forbid,
-    Allow,
-}
-
 /// A single unit of a version number. May be digits or a string of characters.
 ///
 /// Groups of these are called `Chunk`s, and are the identifiers separated by
@@ -804,11 +797,11 @@ impl Unit {
             .then(|| Unit::Letters(s))
     }
 
-    fn parse<'a, 'b>(mode: &'a HyphenMode, i: &'b str) -> IResult<&'b str, Unit> {
-        match mode {
-            HyphenMode::Forbid => alt((Unit::digits, Unit::string))(i),
-            HyphenMode::Allow => alt((Unit::digits, Unit::string_with_hyphens))(i),
-        }
+    fn parse<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Unit>
+    where
+        F: Fn(&'b str) -> IResult<&'b str, Unit>,
+    {
+        alt((Unit::digits, f))(i)
     }
 
     fn digits(i: &str) -> IResult<&str, Unit> {
@@ -926,24 +919,33 @@ impl Chunk {
         }
     }
 
-    fn parse<'a, 'b>(mode: &'a HyphenMode, i: &'b str) -> IResult<&'b str, Chunk> {
-        Chunk::units(mode, i).map(|(i, v)| (i, Chunk(v)))
+    fn parse<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Chunk>
+    where
+        F: Fn(&'b str) -> IResult<&'b str, Unit>,
+    {
+        Chunk::units(f, i).map(|(i, v)| (i, Chunk(v)))
     }
 
     /// Handling `0` is a bit tricky. We can't allow runs of zeros in a chunk,
     /// since a version like `1.000.1` would parse as `1.0.1`.
-    fn units<'a, 'b>(mode: &'a HyphenMode, i: &'b str) -> IResult<&'b str, Vec<Unit>> {
+    fn units<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Vec<Unit>>
+    where
+        F: Fn(&'b str) -> IResult<&'b str, Unit>,
+    {
         alt((
-            |i| Chunk::zero_with_letters(mode, i),
+            |i| Chunk::zero_with_letters(f, i),
             map(Unit::single_zero, |u| vec![u]),
-            many1(|i| Unit::parse(mode, i)),
+            many1(|i| Unit::parse(f, i)),
         ))(i)
     }
 
-    fn zero_with_letters<'a, 'b>(mode: &'a HyphenMode, i: &'b str) -> IResult<&'b str, Vec<Unit>> {
+    fn zero_with_letters<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Vec<Unit>>
+    where
+        F: Fn(&'b str) -> IResult<&'b str, Unit>,
+    {
         let (i, z) = Unit::single_zero(i)?;
         let (i, s) = Unit::string(i)?;
-        let (i, c) = opt(|i| Chunk::units(mode, i))(i)?;
+        let (i, c) = opt(|i| Chunk::units(f, i))(i)?;
 
         let mut us = vec![z, s];
         if let Some(x) = c {
@@ -1012,14 +1014,17 @@ impl fmt::Display for Chunk {
 pub struct Chunks(pub Vec<Chunk>);
 
 impl Chunks {
-    fn parse<'a, 'b>(mode: &'a HyphenMode, i: &'b str) -> IResult<&'b str, Chunks> {
-        let (i, cs) = separated_list1(char('.'), |i| Chunk::parse(mode, i))(i)?;
+    fn parse<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Chunks>
+    where
+        F: Fn(&'b str) -> IResult<&'b str, Unit>,
+    {
+        let (i, cs) = separated_list1(char('.'), |i| Chunk::parse(f, i))(i)?;
         Ok((i, Chunks(cs)))
     }
 
     fn pre_rel(i: &str) -> IResult<&str, Chunks> {
         let (i, _) = char('-')(i)?;
-        Chunks::parse(&HyphenMode::Allow, i)
+        Chunks::parse(&Unit::string_with_hyphens, i)
     }
 }
 

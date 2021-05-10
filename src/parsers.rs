@@ -1,10 +1,9 @@
 //! Reusable parsers for the `versions` library.
 
 use nom::branch::alt;
-use nom::bytes::complete::tag;
-use nom::character::complete::{alphanumeric1, char, digit1};
+use nom::bytes::complete::{tag, take_while1};
+use nom::character::complete::{char, digit1};
 use nom::combinator::{map, map_res};
-use nom::multi::many1;
 use nom::IResult;
 
 /// Parse an unsigned integer.
@@ -30,9 +29,8 @@ fn unsigned_test() {
 /// as well as hyphens.
 pub fn meta(i: &str) -> IResult<&str, String> {
     let (i, _) = char('+')(i)?;
-    // TODO Surely there is a better way to do this that avoids the Vec.
     map(
-        many1(alt((alphanumeric1, tag("-"), tag(".")))),
-        |v: Vec<&str>| v.into_iter().collect(),
+        take_while1(|c: char| c.is_ascii_alphanumeric() || c == '-' || c == '.'),
+        |s: &str| s.to_owned(),
     )(i)
 }

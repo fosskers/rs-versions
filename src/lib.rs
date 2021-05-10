@@ -49,7 +49,7 @@
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;
 use nom::branch::alt;
-use nom::bytes::complete::tag;
+use nom::bytes::complete::{tag, take_while1};
 use nom::character::complete::{alpha1, alphanumeric1, char, digit1};
 use nom::combinator::{map, map_res, opt, peek, recognize, value};
 use nom::multi::{many1, separated_list1};
@@ -835,10 +835,10 @@ impl Unit {
 
     /// Parsing `Unit`s that belong to the prerelease section.
     fn string_with_hyphens(i: &str) -> IResult<&str, Unit> {
-        many1(alt((alpha1, tag("-"))))(i).map(|(i, v)| {
-            let string = v.into_iter().collect();
-            (i, Unit::Letters(string))
-        })
+        map(
+            take_while1(|c: char| c.is_ascii_alphabetic() || c == '-'),
+            |s: &str| Unit::Letters(s.to_owned()),
+        )(i)
     }
 
     fn single_zero(i: &str) -> IResult<&str, Unit> {

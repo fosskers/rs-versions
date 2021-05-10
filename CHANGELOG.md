@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## 3.0.1 (2021-05-09)
+
+#### Changed
+
+- Certain parsers are now faster and use less memory.
+
 ## 3.0.0 (2021-04-16)
 
 This release brings `versions` in line with version `2.0.0` of the SemVer spec.

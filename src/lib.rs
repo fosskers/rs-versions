@@ -44,6 +44,7 @@
 //! You can enable [`Serde`](https://serde.rs/) support for serialization and
 //! deserialization with the `serde` feature.
 
+#![allow(clippy::clippy::many_single_char_names)]
 #![doc(html_root_url = "https://docs.rs/versions/3.0.2")]
 
 use itertools::EitherOrBoth::{Both, Left, Right};
@@ -59,6 +60,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 mod parsers;
 
@@ -91,7 +93,7 @@ mod parsers;
 ///
 /// [semver]: http://semver.org
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Eq, Hash, Clone, Default)]
+#[derive(Debug, Eq, Clone, Default)]
 pub struct SemVer {
     pub major: u32,
     pub minor: u32,
@@ -267,6 +269,20 @@ impl SemVer {
         };
 
         Ok((i, sv))
+    }
+}
+
+/// For Rust, it is a Law that the following must hold:
+///
+/// > k1 == k2 -> hash(k1) == hash(k2)
+///
+/// And so this is hand-implemented, since `PartialEq` also is.
+impl Hash for SemVer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.major.hash(state);
+        self.minor.hash(state);
+        self.patch.hash(state);
+        self.pre_rel.hash(state);
     }
 }
 
@@ -934,10 +950,7 @@ impl Chunk {
 
     /// Does this `Chunk` start with a letter?
     fn is_lettered(&self) -> bool {
-        match self.0.as_slice() {
-            [Unit::Letters(_), ..] => true,
-            _ => false,
-        }
+        matches!(self.0.as_slice(), [Unit::Letters(_), ..])
     }
 
     fn parse<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Chunk>
@@ -1125,26 +1138,17 @@ impl Versioning {
 
     /// A short-hand for detecting an inner [`SemVer`].
     pub fn is_ideal(&self) -> bool {
-        match self {
-            Versioning::Ideal(_) => true,
-            _ => false,
-        }
+        matches!(self, Versioning::Ideal(_))
     }
 
     /// A short-hand for detecting an inner [`Version`].
     pub fn is_general(&self) -> bool {
-        match self {
-            Versioning::General(_) => true,
-            _ => false,
-        }
+        matches!(self, Versioning::General(_))
     }
 
     /// A short-hand for detecting an inner [`Mess`].
     pub fn is_complex(&self) -> bool {
-        match self {
-            Versioning::Complex(_) => true,
-            _ => false,
-        }
+        matches!(self, Versioning::Complex(_))
     }
 
     /// Try to extract a position from the `Versioning` as a nice integer, as if it

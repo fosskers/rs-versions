@@ -6,6 +6,14 @@
 
 - A proper LICENSE file.
 
+#### Changed
+
+- The `Hash` instance of `SemVer` is now hand-written to uphold the Law that:
+
+```
+k1 == k2 -> hash(k1) == hash(k2)
+```
+
 ## 3.0.1 (2021-05-09)
 
 #### Changed

@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## 3.0.2 (2021-05-27)
+
+#### Added
+
+- A proper LICENSE file.
+
 ## 3.0.1 (2021-05-09)
 
 #### Changed

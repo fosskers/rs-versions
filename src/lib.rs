@@ -45,7 +45,7 @@
 //! deserialization with the `serde` feature.
 
 #![allow(clippy::clippy::many_single_char_names)]
-#![doc(html_root_url = "https://docs.rs/versions/3.0.2")]
+#![doc(html_root_url = "https://docs.rs/versions/3.0.3")]
 
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;

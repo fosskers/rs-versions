@@ -1,6 +1,6 @@
 [package]
 name = "versions"
-version = "3.0.2"
+version = "3.0.3"
 authors = ["Colin Woodbury <colin@fosskers.ca>"]
 edition = "2018"
 description = "A library for parsing and comparing software version numbers."
@@ -12,8 +12,8 @@ keywords = ["version", "compare", "semantic"]
 categories = ["parser-implementations"]
 
 [dependencies]
-nom = "6.0"
 itertools = "0.10"
+nom = "7.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]

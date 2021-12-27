@@ -18,3 +18,5 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]
 version-sync = "0.9"
+semver = "1.0"
+semver-parser = "0.10"

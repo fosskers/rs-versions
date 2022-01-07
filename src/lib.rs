@@ -115,16 +115,13 @@ impl SemVer {
 
     /// A lossless conversion from `SemVer` to [`Version`].
     ///
-    /// **Note:** Unlike `SemVer`, `Version` expects its metadata before the
-    /// prerelease. For instance:
-    ///
     /// ```
     /// use versions::SemVer;
     ///
     /// let orig = "1.2.3-r1+git123";
     /// let ver = SemVer::new(orig).unwrap().to_version();
     ///
-    /// assert_eq!("1.2.3+git123-r1", format!("{}", ver));
+    /// assert_eq!("1.2.3-r1+git123", format!("{}", ver));
     /// ```
     pub fn to_version(&self) -> Version {
         let chunks = Chunks(vec![
@@ -137,8 +134,7 @@ impl SemVer {
             epoch: None,
             chunks,
             meta: self.meta.clone(),
-            // release: self.pre_rel.clone(),
-            release: todo!(),
+            release: self.pre_rel.clone(),
         }
     }
 
@@ -373,7 +369,7 @@ pub struct Version {
     pub epoch: Option<u32>,
     pub chunks: Chunks,
     pub meta: Option<String>,
-    pub release: Option<Chunks>,
+    pub release: Option<Chanks>,
 }
 
 impl Version {
@@ -430,7 +426,8 @@ impl Version {
     fn to_mess_continued(&self) -> Mess {
         let chunks = self.chunks.0.iter().filter_map(|c| c.mchunk()).collect();
         let next = self.release.as_ref().map(|cs| {
-            let chunks = cs.0.iter().filter_map(|c| c.mchunk()).collect();
+            // let chunks = cs.0.iter().filter_map(|c| c.mchunk()).collect();
+            let chunks = todo!();
             (Sep::Hyphen, Box::new(Mess { chunks, next: None }))
         });
         Mess { chunks, next }
@@ -488,7 +485,7 @@ impl Version {
     pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
         let (i, chunks) = Chunks::parse(&Unit::string, i)?;
-        let (i, release) = opt(Chunks::pre_rel)(i)?;
+        let (i, release) = opt(Chanks::pre_rel)(i)?;
         let (i, meta) = opt(parsers::meta)(i)?;
 
         let v = Version {
@@ -540,12 +537,12 @@ impl std::fmt::Display for Version {
 
         write!(f, "{}", self.chunks)?;
 
-        if let Some(m) = &self.meta {
-            write!(f, "+{}", m)?;
-        }
-
         if let Some(r) = &self.release {
             write!(f, "-{}", r)?;
+        }
+
+        if let Some(m) = &self.meta {
+            write!(f, "+{}", m)?;
         }
 
         Ok(())

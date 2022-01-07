@@ -60,7 +60,6 @@ use parsers::{hyphenated_alphanum, unsigned};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
-use std::fmt;
 use std::hash::{Hash, Hasher};
 
 mod parsers;
@@ -100,7 +99,7 @@ pub struct SemVer {
     pub minor: u32,
     pub patch: u32,
     /// `Some` implies that the inner `Vec` of the `Chunks` is not empty.
-    pub pre_rel: Option<Chunks>,
+    pub pre_rel: Option<Chanks>,
     /// `Some` implies that the inner `String` is not empty.
     pub meta: Option<String>,
 }
@@ -138,7 +137,8 @@ impl SemVer {
             epoch: None,
             chunks,
             meta: self.meta.clone(),
-            release: self.pre_rel.clone(),
+            // release: self.pre_rel.clone(),
+            release: todo!(),
         }
     }
 
@@ -159,7 +159,8 @@ impl SemVer {
             MChunk::Digits(self.patch, self.patch.to_string()),
         ];
         let next = self.pre_rel.as_ref().map(|pr| {
-            let chunks = pr.0.iter().filter_map(|c| c.mchunk()).collect();
+            // let chunks = pr.0.iter().filter_map(|c| c.mchunk()).collect();
+            let chunks = todo!();
             let next = self.meta.as_ref().map(|meta| {
                 let chunks = vec![MChunk::Plain(meta.clone())];
                 (Sep::Plus, Box::new(Mess { chunks, next: None }))
@@ -200,7 +201,8 @@ impl SemVer {
                             Some([Unit::Letters(_), ..]) => Greater,
                             // 1.2.3 < 1.2.3.0
                             Some([Unit::Digits(_), ..]) => Less,
-                            Some([]) | None => self.pre_rel.cmp(&other.release),
+                            // Some([]) | None => self.pre_rel.cmp(&other.release),
+                            Some([]) | None => todo!(),
                         },
                     },
                 },
@@ -258,7 +260,7 @@ impl SemVer {
         let (i, minor) = parsers::unsigned(i)?;
         let (i, _) = char('.')(i)?;
         let (i, patch) = parsers::unsigned(i)?;
-        let (i, pre_rel) = opt(Chunks::pre_rel)(i)?;
+        let (i, pre_rel) = opt(Chanks::parse)(i)?;
         let (i, meta) = opt(parsers::meta)(i)?;
 
         let sv = SemVer {
@@ -322,8 +324,8 @@ impl Ord for SemVer {
     }
 }
 
-impl fmt::Display for SemVer {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for SemVer {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}.{}.{}", self.major, self.minor, self.patch)?;
 
         if let Some(p) = &self.pre_rel {
@@ -530,8 +532,8 @@ impl Ord for Version {
     }
 }
 
-impl fmt::Display for Version {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(e) = self.epoch {
             write!(f, "{}:", e)?;
         }
@@ -681,8 +683,8 @@ impl Ord for Mess {
     }
 }
 
-impl fmt::Display for Mess {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for Mess {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.chunks.iter().join("."))?;
 
         if let Some((sep, m)) = &self.next {
@@ -770,8 +772,8 @@ impl Ord for MChunk {
     }
 }
 
-impl fmt::Display for MChunk {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for MChunk {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             MChunk::Digits(_, s) => write!(f, "{}", s),
             MChunk::Rev(_, s) => write!(f, "{}", s),
@@ -798,8 +800,8 @@ pub enum Sep {
     Underscore,
 }
 
-impl fmt::Display for Sep {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for Sep {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let c = match self {
             Sep::Colon => ':',
             Sep::Hyphen => '-',
@@ -863,8 +865,8 @@ impl Unit {
     }
 }
 
-impl fmt::Display for Unit {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for Unit {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Unit::Digits(ns) => write!(f, "{}", ns),
             Unit::Letters(cs) => write!(f, "{}", cs),
@@ -924,6 +926,83 @@ impl Chank {
 
     fn id_chars(i: &str) -> IResult<&str, &str> {
         hyphenated_alphanum(i)
+    }
+}
+
+impl PartialOrd for Chank {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Chank {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Chank::Numeric(a), Chank::Numeric(b)) => a.cmp(&b),
+            (Chank::Numeric(_), Chank::Alphanum(_)) => Ordering::Less,
+            (Chank::Alphanum(_), Chank::Numeric(_)) => Ordering::Greater,
+            (Chank::Alphanum(a), Chank::Alphanum(b)) => a.cmp(&b),
+        }
+    }
+}
+
+impl std::fmt::Display for Chank {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Chank::Numeric(n) => write!(f, "{}", n),
+            Chank::Alphanum(a) => write!(f, "{}", a),
+        }
+    }
+}
+
+/// Multiple [`Chank`] values.
+///
+/// Defined as a newtype wrapper so that we can define custom parser and trait
+/// methods.
+///
+/// # Examples
+///
+/// - `123.abc-1bc.456`
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
+pub struct Chanks(pub Vec<Chank>);
+
+impl Chanks {
+    fn parse(i: &str) -> IResult<&str, Chanks> {
+        map(separated_list1(char('.'), Chank::parse), Chanks)(i)
+    }
+}
+
+impl PartialOrd for Chanks {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Chanks {
+    fn cmp(&self, other: &Self) -> Ordering {
+        todo!()
+    }
+}
+
+impl std::fmt::Display for Chanks {
+    // FIXME Fri Jan  7 11:44:50 2022
+    //
+    // Use `itersperse` here once it stabilises.
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.0.as_slice() {
+            [] => Ok(()),
+            [c] => write!(f, "{}", c),
+            [c, rest @ ..] => {
+                write!(f, "{}", c)?;
+
+                for r in rest {
+                    write!(f, ".{}", r)?;
+                }
+
+                Ok(())
+            }
+        }
     }
 }
 
@@ -1087,8 +1166,8 @@ impl Ord for Chunk {
     }
 }
 
-impl fmt::Display for Chunk {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for Chunk {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for u in &self.0 {
             write!(f, "{}", u)?;
         }
@@ -1155,8 +1234,8 @@ impl Ord for Chunks {
     }
 }
 
-impl fmt::Display for Chunks {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for Chunks {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s: String = self.0.iter().map(|c| format!("{}", c)).join(".");
         write!(f, "{}", s)
     }
@@ -1277,8 +1356,8 @@ impl Ord for Versioning {
     }
 }
 
-impl fmt::Display for Versioning {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for Versioning {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Versioning::Ideal(s) => write!(f, "{}", s),
             Versioning::General(v) => write!(f, "{}", v),
@@ -1360,20 +1439,6 @@ mod tests {
         let v = "1.2.2-00a";
 
         assert_eq!("", SemVer::parse(v).unwrap().0);
-    }
-
-    #[test]
-    fn semver_zeros() {
-        let pre_rel = Chunks(vec![Chunk(vec![
-            Unit::Letters("b".to_string()),
-            Unit::Digits(0),
-            Unit::Digits(5),
-        ])]);
-
-        assert_eq!(
-            Some(pre_rel),
-            SemVer::new("2.2.1-b05").and_then(|sv| sv.pre_rel)
-        );
     }
 
     #[test]

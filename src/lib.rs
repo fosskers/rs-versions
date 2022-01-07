@@ -260,7 +260,7 @@ impl SemVer {
         let (i, minor) = parsers::unsigned(i)?;
         let (i, _) = char('.')(i)?;
         let (i, patch) = parsers::unsigned(i)?;
-        let (i, pre_rel) = opt(Chanks::parse)(i)?;
+        let (i, pre_rel) = opt(Chanks::pre_rel)(i)?;
         let (i, meta) = opt(parsers::meta)(i)?;
 
         let sv = SemVer {
@@ -964,6 +964,11 @@ impl Chanks {
     fn parse(i: &str) -> IResult<&str, Chanks> {
         map(separated_list1(char('.'), Chank::parse), Chanks)(i)
     }
+
+    fn pre_rel(i: &str) -> IResult<&str, Chanks> {
+        let (i, _) = char('-')(i)?;
+        Chanks::parse(i)
+    }
 }
 
 impl PartialOrd for Chanks {
@@ -983,6 +988,9 @@ impl Ord for Chanks {
                     Greater => Some(Greater),
                     Equal => None,
                 },
+                // From the Semver spec: A larger set of pre-release fields has
+                // a higher precedence than a smaller set, if all the preceding
+                // identifiers are equal.
                 Left(_) => Some(Greater),
                 Right(_) => Some(Less),
             })

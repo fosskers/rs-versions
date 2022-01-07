@@ -2,7 +2,7 @@
 name = "versions"
 version = "3.0.3"
 authors = ["Colin Woodbury <colin@fosskers.ca>"]
-edition = "2018"
+edition = "2021"
 description = "A library for parsing and comparing software version numbers."
 homepage = "https://github.com/fosskers/rs-versions"
 repository = "https://github.com/fosskers/rs-versions"
@@ -13,7 +13,7 @@ categories = ["parser-implementations"]
 
 [dependencies]
 itertools = "0.10"
-nom = "7.0"
+nom = "7.1"
 serde = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]

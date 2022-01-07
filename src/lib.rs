@@ -52,9 +52,10 @@ use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while1};
 use nom::character::complete::{alpha1, alphanumeric1, char, digit1};
-use nom::combinator::{map, map_res, opt, peek, recognize, value};
+use nom::combinator::{fail, map, map_res, opt, peek, recognize, value};
 use nom::multi::{many1, separated_list1};
 use nom::IResult;
+use parsers::{hyphenated_alphanum, unsigned};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -873,6 +874,61 @@ impl fmt::Display for Unit {
 
 /// A logical unit of a version number.
 ///
+/// Either entirely numerical (with no leading zeroes) or entirely
+/// alphanumerical (with a free mixture of numbers, letters, and hyphens).
+///
+/// Groups of these (i.e. [`Chunks`]) are separated by periods to form a full
+/// section of a version number.
+///
+/// # Examples
+///
+/// - `1`
+/// - `20150826`
+/// - `r3`
+/// - `0rc1-abc3`
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum Chank {
+    Numeric(u32),
+    Alphanum(String),
+}
+
+// TODO Mon Dec 27 12:02:03 2021
+//
+// See the roam note "SemVer" for grammar notes.
+//
+// Note that if the Chunk is "numeric", it does _not_ permit hyphens! Hyphens
+// can exist between sections of pure digits, but then those should be
+// considered alphanumeric strings and wrapped/compared as such.
+impl Chank {
+    fn parse(i: &str) -> IResult<&str, Chank> {
+        alt((Chank::alphanum, Chank::numeric))(i)
+    }
+
+    // A clever interpretation of the grammar of "alphanumeric identifier".
+    // Instead of having a big, composed parser that structurally accounts for
+    // the presence of a "non-digit", we just check for one after the fact.
+    fn alphanum(i: &str) -> IResult<&str, Chank> {
+        let (i2, ids) = Chank::id_chars(i)?;
+
+        if ids.contains(|c: char| c.is_ascii_alphabetic() || c == '-') {
+            Ok((i2, Chank::Alphanum(ids.to_string())))
+        } else {
+            fail(i)
+        }
+    }
+
+    fn numeric(i: &str) -> IResult<&str, Chank> {
+        map(unsigned, Chank::Numeric)(i)
+    }
+
+    fn id_chars(i: &str) -> IResult<&str, &str> {
+        hyphenated_alphanum(i)
+    }
+}
+
+/// A logical unit of a version number.
+///
 /// Can consist of multiple letters and numbers. Groups of these (i.e.
 /// [`Chunks`]) are separated by periods to form a full version number.
 ///
@@ -1044,6 +1100,10 @@ impl fmt::Display for Chunk {
 ///
 /// Defined as a newtype wrapper so that we can define custom parser and trait
 /// methods.
+///
+/// # Examples
+///
+/// - `123.abc.456`
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Chunks(pub Vec<Chunk>);
@@ -1238,6 +1298,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn chanks() {
+        assert_eq!(Ok(("", Chank::Numeric(123))), Chank::parse("123"));
+        assert_eq!(
+            Ok(("", Chank::Alphanum("123a".to_string()))),
+            Chank::parse("123a")
+        );
+        assert_eq!(
+            Ok(("", Chank::Alphanum("123-456".to_string()))),
+            Chank::parse("123-456")
+        );
+        assert_eq!(
+            Ok(("", Chank::Alphanum("00a".to_string()))),
+            Chank::parse("00a")
+        );
+    }
+
+    #[test]
     fn official_semvers() {
         let goods = vec![
             "0.1.0",
@@ -1276,6 +1353,13 @@ mod tests {
                 SemVer::new(s).map(|sv| format!("{}", sv))
             )
         }
+    }
+
+    #[test]
+    fn tricky_semvers() {
+        let v = "1.2.2-00a";
+
+        assert_eq!("", SemVer::parse(v).unwrap().0);
     }
 
     #[test]

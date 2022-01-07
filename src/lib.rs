@@ -895,13 +895,6 @@ pub enum Chank {
     Alphanum(String),
 }
 
-// TODO Mon Dec 27 12:02:03 2021
-//
-// See the roam note "SemVer" for grammar notes.
-//
-// Note that if the Chunk is "numeric", it does _not_ permit hyphens! Hyphens
-// can exist between sections of pure digits, but then those should be
-// considered alphanumeric strings and wrapped/compared as such.
 impl Chank {
     fn parse(i: &str) -> IResult<&str, Chank> {
         alt((Chank::alphanum, Chank::numeric))(i)
@@ -939,8 +932,8 @@ impl Ord for Chank {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
             (Chank::Numeric(a), Chank::Numeric(b)) => a.cmp(&b),
-            (Chank::Numeric(_), Chank::Alphanum(_)) => Ordering::Less,
-            (Chank::Alphanum(_), Chank::Numeric(_)) => Ordering::Greater,
+            (Chank::Numeric(_), Chank::Alphanum(_)) => Less,
+            (Chank::Alphanum(_), Chank::Numeric(_)) => Greater,
             (Chank::Alphanum(a), Chank::Alphanum(b)) => a.cmp(&b),
         }
     }
@@ -981,7 +974,19 @@ impl PartialOrd for Chanks {
 
 impl Ord for Chanks {
     fn cmp(&self, other: &Self) -> Ordering {
-        todo!()
+        self.0
+            .iter()
+            .zip_longest(&other.0)
+            .find_map(|eob| match eob {
+                Both(a, b) => match a.cmp(&b) {
+                    Less => Some(Less),
+                    Greater => Some(Greater),
+                    Equal => None,
+                },
+                Left(_) => Some(Greater),
+                Right(_) => Some(Less),
+            })
+            .unwrap_or(Equal)
     }
 }
 

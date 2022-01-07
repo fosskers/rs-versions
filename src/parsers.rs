@@ -9,7 +9,7 @@ use nom::IResult;
 /// Parse an unsigned integer.
 ///
 /// Should yield either a zero on its own, or some other multi-digit number.
-pub fn unsigned(i: &str) -> IResult<&str, u32> {
+pub(crate) fn unsigned(i: &str) -> IResult<&str, u32> {
     map_res(alt((tag("0"), digit1)), |s: &str| s.parse::<u32>())(i)
 }
 
@@ -26,8 +26,13 @@ fn unsigned_test() {
 }
 
 /// Some alphanumeric combination, possibly punctuated by `-` characters.
-pub fn hyphenated_alphanum(i: &str) -> IResult<&str, &str> {
+pub(crate) fn hyphenated_alphanums(i: &str) -> IResult<&str, &str> {
     take_while1(|c: char| c.is_ascii_alphanumeric() || c == '-')(i)
+}
+
+/// Some alphanumeric combination.
+pub(crate) fn alphanums(i: &str) -> IResult<&str, &str> {
+    take_while1(|c: char| c.is_ascii_alphanumeric())(i)
 }
 
 /// Parse metadata. As of SemVer 2.0, this can contain alphanumeric characters

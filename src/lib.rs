@@ -55,7 +55,7 @@ use nom::character::complete::{alpha1, alphanumeric1, char, digit1};
 use nom::combinator::{fail, map, map_res, opt, peek, recognize, value};
 use nom::multi::{many1, separated_list1};
 use nom::IResult;
-use parsers::{hyphenated_alphanum, unsigned};
+use parsers::{alphanums, hyphenated_alphanums, unsigned};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -124,10 +124,10 @@ impl SemVer {
     /// assert_eq!("1.2.3-r1+git123", format!("{}", ver));
     /// ```
     pub fn to_version(&self) -> Version {
-        let chunks = Chunks(vec![
-            Chunk(vec![Unit::Digits(self.major)]),
-            Chunk(vec![Unit::Digits(self.minor)]),
-            Chunk(vec![Unit::Digits(self.patch)]),
+        let chunks = Chanks(vec![
+            Chank::Numeric(self.major),
+            Chank::Numeric(self.minor),
+            Chank::Numeric(self.patch),
         ]);
 
         Version {
@@ -190,13 +190,16 @@ impl SemVer {
                         None => Greater,
                         Some(Greater) => Greater,
                         Some(Less) => Less,
-                        Some(Equal) => match other.chunks.0.get(3).as_ref().map(|c| c.0.as_slice())
-                        {
+                        // By this point, the major/minor/patch positions have
+                        // all been equal. If there is a fourth position, its
+                        // type, not its value, will determine which overall
+                        // version is greater.
+                        Some(Equal) => match other.chunks.0.get(3) {
                             // 1.2.3 > 1.2.3.git
-                            Some([Unit::Letters(_), ..]) => Greater,
+                            Some(Chank::Alphanum(_)) => Greater,
                             // 1.2.3 < 1.2.3.0
-                            Some([Unit::Digits(_), ..]) => Less,
-                            Some([]) | None => self.pre_rel.cmp(&other.release),
+                            Some(Chank::Numeric(_)) => Less,
+                            None => self.pre_rel.cmp(&other.release),
                         },
                     },
                 },
@@ -254,7 +257,7 @@ impl SemVer {
         let (i, minor) = parsers::unsigned(i)?;
         let (i, _) = char('.')(i)?;
         let (i, patch) = parsers::unsigned(i)?;
-        let (i, pre_rel) = opt(Chanks::pre_rel)(i)?;
+        let (i, pre_rel) = opt(Chanks::parse_pre_rel)(i)?;
         let (i, meta) = opt(parsers::meta)(i)?;
 
         let sv = SemVer {
@@ -365,7 +368,7 @@ impl std::fmt::Display for SemVer {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Version {
     pub epoch: Option<u32>,
-    pub chunks: Chunks,
+    pub chunks: Chanks,
     pub meta: Option<String>,
     pub release: Option<Chanks>,
 }
@@ -391,12 +394,12 @@ impl Version {
     /// assert_eq!(Some(4), mess.nth(2));
     /// ```
     pub fn nth(&self, n: usize) -> Option<u32> {
-        self.chunks.0.get(n).and_then(Chunk::single_digit)
+        self.chunks.0.get(n).and_then(Chank::single_digit)
     }
 
     /// Like `nth`, but pulls a number even if it was followed by letters.
     pub fn nth_lenient(&self, n: usize) -> Option<u32> {
-        self.chunks.0.get(n).and_then(Chunk::single_digit_lenient)
+        self.chunks.0.get(n).and_then(Chank::single_digit_lenient)
     }
 
     /// A lossless conversion from `Version` to [`Mess`].
@@ -422,7 +425,7 @@ impl Version {
 
     /// Convert to a `Mess` without considering the epoch.
     fn to_mess_continued(&self) -> Mess {
-        let chunks = self.chunks.0.iter().filter_map(|c| c.mchunk()).collect();
+        let chunks = self.chunks.0.iter().map(|c| c.mchunk()).collect();
         let next = self.release.as_ref().map(|cs| {
             let chunks = cs.0.iter().map(|c| c.mchunk()).collect();
             (Sep::Hyphen, Box::new(Mess { chunks, next: None }))
@@ -481,8 +484,8 @@ impl Version {
     /// combination with other general `nom` parsers.
     pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
-        let (i, chunks) = Chunks::parse(&Unit::string, i)?;
-        let (i, release) = opt(Chanks::pre_rel)(i)?;
+        let (i, chunks) = Chanks::parse_major(i)?;
+        let (i, release) = opt(Chanks::parse_pre_rel)(i)?;
         let (i, meta) = opt(parsers::meta)(i)?;
 
         let v = Version {
@@ -890,15 +893,41 @@ pub enum Chank {
 }
 
 impl Chank {
+    /// If this `Chunk` is made up of a single digit, then pull out the inner
+    /// value.
+    ///
+    /// ```
+    /// use versions::{Chunk, Unit};
+    ///
+    /// let v = Chunk(vec![Unit::Digits(1)]);
+    /// assert_eq!(Some(1), v.single_digit());
+    ///
+    /// let v = Chunk(vec![Unit::Letters("abc".to_string())]);
+    /// assert_eq!(None, v.single_digit());
+    ///
+    /// let v = Chunk(vec![Unit::Digits(1), Unit::Letters("abc".to_string())]);
+    /// assert_eq!(None, v.single_digit());
+    /// ```
+    pub fn single_digit(&self) -> Option<u32> {
+        match self {
+            Chank::Numeric(n) => Some(*n),
+            Chank::Alphanum(_) => None,
+        }
+    }
+
     fn parse(i: &str) -> IResult<&str, Chank> {
         alt((Chank::alphanum, Chank::numeric))(i)
+    }
+
+    fn parse_without_hyphens(i: &str) -> IResult<&str, Chank> {
+        alt((Chank::alphanum_without_hyphens, Chank::numeric))(i)
     }
 
     // A clever interpretation of the grammar of "alphanumeric identifier".
     // Instead of having a big, composed parser that structurally accounts for
     // the presence of a "non-digit", we just check for one after the fact.
     fn alphanum(i: &str) -> IResult<&str, Chank> {
-        let (i2, ids) = Chank::id_chars(i)?;
+        let (i2, ids) = hyphenated_alphanums(i)?;
 
         if ids.contains(|c: char| c.is_ascii_alphabetic() || c == '-') {
             Ok((i2, Chank::Alphanum(ids.to_string())))
@@ -907,12 +936,18 @@ impl Chank {
         }
     }
 
-    fn numeric(i: &str) -> IResult<&str, Chank> {
-        map(unsigned, Chank::Numeric)(i)
+    fn alphanum_without_hyphens(i: &str) -> IResult<&str, Chank> {
+        let (i2, ids) = alphanums(i)?;
+
+        if ids.contains(|c: char| c.is_ascii_alphabetic()) {
+            Ok((i2, Chank::Alphanum(ids.to_string())))
+        } else {
+            fail(i)
+        }
     }
 
-    fn id_chars(i: &str) -> IResult<&str, &str> {
-        hyphenated_alphanum(i)
+    fn numeric(i: &str) -> IResult<&str, Chank> {
+        map(unsigned, Chank::Numeric)(i)
     }
 
     fn mchunk(&self) -> MChunk {
@@ -978,7 +1013,15 @@ impl Chanks {
         map(separated_list1(char('.'), Chank::parse), Chanks)(i)
     }
 
-    fn pre_rel(i: &str) -> IResult<&str, Chanks> {
+    // Intended for parsing a `Version`.
+    fn parse_major(i: &str) -> IResult<&str, Chanks> {
+        map(
+            separated_list1(char('.'), Chank::parse_without_hyphens),
+            Chanks,
+        )(i)
+    }
+
+    fn parse_pre_rel(i: &str) -> IResult<&str, Chanks> {
         let (i, _) = char('-')(i)?;
         Chanks::parse(i)
     }

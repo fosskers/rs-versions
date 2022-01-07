@@ -155,8 +155,7 @@ impl SemVer {
             MChunk::Digits(self.patch, self.patch.to_string()),
         ];
         let next = self.pre_rel.as_ref().map(|pr| {
-            // let chunks = pr.0.iter().filter_map(|c| c.mchunk()).collect();
-            let chunks = todo!();
+            let chunks = pr.0.iter().map(|c| c.mchunk()).collect();
             let next = self.meta.as_ref().map(|meta| {
                 let chunks = vec![MChunk::Plain(meta.clone())];
                 (Sep::Plus, Box::new(Mess { chunks, next: None }))
@@ -197,8 +196,7 @@ impl SemVer {
                             Some([Unit::Letters(_), ..]) => Greater,
                             // 1.2.3 < 1.2.3.0
                             Some([Unit::Digits(_), ..]) => Less,
-                            // Some([]) | None => self.pre_rel.cmp(&other.release),
-                            Some([]) | None => todo!(),
+                            Some([]) | None => self.pre_rel.cmp(&other.release),
                         },
                     },
                 },
@@ -426,8 +424,7 @@ impl Version {
     fn to_mess_continued(&self) -> Mess {
         let chunks = self.chunks.0.iter().filter_map(|c| c.mchunk()).collect();
         let next = self.release.as_ref().map(|cs| {
-            // let chunks = cs.0.iter().filter_map(|c| c.mchunk()).collect();
-            let chunks = todo!();
+            let chunks = cs.0.iter().map(|c| c.mchunk()).collect();
             (Sep::Hyphen, Box::new(Mess { chunks, next: None }))
         });
         Mess { chunks, next }
@@ -916,6 +913,25 @@ impl Chank {
 
     fn id_chars(i: &str) -> IResult<&str, &str> {
         hyphenated_alphanum(i)
+    }
+
+    fn mchunk(&self) -> MChunk {
+        // FIXME Fri Jan  7 12:34:24 2022
+        //
+        // Is there going to be an issue here, having not accounted for an `r`?
+        match self {
+            Chank::Numeric(n) => MChunk::Digits(*n, n.to_string()),
+            Chank::Alphanum(s) => MChunk::Plain(s.clone()),
+        }
+        // match self.0.as_slice() {
+        //     [] => None,
+        //     [Unit::Digits(u)] => Some(MChunk::Digits(*u, u.to_string())),
+        //     [Unit::Letters(s), Unit::Digits(u)] if s == "r" => {
+        //         Some(MChunk::Rev(*u, format!("r{}", u)))
+        //     }
+        //     [Unit::Letters(s)] => Some(MChunk::Plain(s.clone())),
+        //     _ => Some(MChunk::Plain(format!("{}", self))),
+        // }
     }
 }
 

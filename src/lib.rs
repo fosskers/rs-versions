@@ -915,6 +915,28 @@ impl Chank {
         }
     }
 
+    /// Like [`Chunk::single_digit`], but will grab a leading `u32` even if
+    /// followed by letters.
+    ///
+    /// ```
+    /// use versions::{Chunk, Unit};
+    ///
+    /// let v = Chunk(vec![Unit::Digits(1)]);
+    /// assert_eq!(Some(1), v.single_digit_lenient());
+    ///
+    /// let v = Chunk(vec![Unit::Letters("abc".to_string())]);
+    /// assert_eq!(None, v.single_digit_lenient());
+    ///
+    /// let v = Chunk(vec![Unit::Digits(0), Unit::Letters("a".to_string())]);
+    /// assert_eq!(Some(0), v.single_digit_lenient());
+    /// ```
+    pub fn single_digit_lenient(&self) -> Option<u32> {
+        match self {
+            Chank::Numeric(n) => Some(*n),
+            Chank::Alphanum(s) => unsigned(s).ok().map(|(_, n)| n),
+        }
+    }
+
     fn parse(i: &str) -> IResult<&str, Chank> {
         alt((Chank::alphanum, Chank::numeric))(i)
     }

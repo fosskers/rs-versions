@@ -128,11 +128,11 @@ impl SemVer {
     /// assert_eq!("1.2.3-r1+git123", format!("{}", ver));
     /// ```
     pub fn to_version(&self) -> Version {
-        let chunks = VChunks(Chanks(vec![
+        let chunks = VChunks(vec![
             Chank::Numeric(self.major),
             Chank::Numeric(self.minor),
             Chank::Numeric(self.patch),
-        ]));
+        ]);
 
         Version {
             epoch: None,
@@ -159,7 +159,7 @@ impl SemVer {
             MChunk::Digits(self.patch, self.patch.to_string()),
         ];
         let next = self.pre_rel.as_ref().map(|pr| {
-            let chunks = pr.0 .0.iter().map(|c| c.mchunk()).collect();
+            let chunks = pr.0.iter().map(|c| c.mchunk()).collect();
             let next = self.meta.as_ref().map(|meta| {
                 let chunks = vec![MChunk::Plain(meta.clone())];
                 (Sep::Plus, Box::new(Mess { chunks, next: None }))
@@ -198,7 +198,7 @@ impl SemVer {
                         // all been equal. If there is a fourth position, its
                         // type, not its value, will determine which overall
                         // version is greater.
-                        Some(Equal) => match other.chunks.0 .0.get(3) {
+                        Some(Equal) => match other.chunks.0.get(3) {
                             // 1.2.3 > 1.2.3.git
                             Some(Chank::Alphanum(_)) => Greater,
                             // 1.2.3 < 1.2.3.0
@@ -407,16 +407,12 @@ impl Version {
     /// assert_eq!(Some(4), mess.nth(2));
     /// ```
     pub fn nth(&self, n: usize) -> Option<u32> {
-        self.chunks.0 .0.get(n).and_then(Chank::single_digit)
+        self.chunks.0.get(n).and_then(Chank::single_digit)
     }
 
     /// Like `nth`, but pulls a number even if it was followed by letters.
     pub fn nth_lenient(&self, n: usize) -> Option<u32> {
-        self.chunks
-            .0
-             .0
-            .get(n)
-            .and_then(Chank::single_digit_lenient)
+        self.chunks.0.get(n).and_then(Chank::single_digit_lenient)
     }
 
     /// A lossless conversion from `Version` to [`Mess`].
@@ -442,9 +438,9 @@ impl Version {
 
     /// Convert to a `Mess` without considering the epoch.
     fn to_mess_continued(&self) -> Mess {
-        let chunks = self.chunks.0 .0.iter().map(|c| c.mchunk()).collect();
+        let chunks = self.chunks.0.iter().map(|c| c.mchunk()).collect();
         let next = self.release.as_ref().map(|cs| {
-            let chunks = cs.0 .0.iter().map(|c| c.mchunk()).collect();
+            let chunks = cs.0.iter().map(|c| c.mchunk()).collect();
             (Sep::Hyphen, Box::new(Mess { chunks, next: None }))
         });
         Mess { chunks, next }
@@ -896,16 +892,16 @@ impl std::fmt::Display for Unit {
     }
 }
 
-/// [`Chunks`] that have comparison behaviour according to SemVer's rules for
+/// [`Chunk`]s that have comparison behaviour according to SemVer's rules for
 /// prereleases.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Release(Chanks);
+pub struct Release(pub Vec<Chank>);
 
 impl Release {
     fn parse(i: &str) -> IResult<&str, Release> {
         let (i, _) = char('-')(i)?;
-        map(Chanks::parse, Release)(i)
+        map(separated_list1(char('.'), Chank::parse), Release)(i)
     }
 }
 
@@ -918,11 +914,10 @@ impl PartialOrd for Release {
 impl Ord for Release {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0
-             .0
             .iter()
-            .zip_longest(&other.0 .0)
+            .zip_longest(&other.0)
             .find_map(|eob| match eob {
-                Both(a, b) => match a.cmp(&b) {
+                Both(a, b) => match a.cmp_semver(&b) {
                     Less => Some(Less),
                     Greater => Some(Greater),
                     Equal => None,
@@ -938,22 +933,37 @@ impl Ord for Release {
 }
 
 impl std::fmt::Display for Release {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+    // FIXME Fri Jan  7 11:44:50 2022
+    //
+    // Use `itersperse` here once it stabilises.
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.0.as_slice() {
+            [] => Ok(()),
+            [c] => write!(f, "{}", c),
+            [c, rest @ ..] => {
+                write!(f, "{}", c)?;
+
+                for r in rest {
+                    write!(f, ".{}", r)?;
+                }
+
+                Ok(())
+            }
+        }
     }
 }
 
-/// [`Chunks`] that have a comparison behaviour specific to [`Version`].
+/// [`Chunk`]s that have a comparison behaviour specific to [`Version`].
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
-pub struct VChunks(Chanks);
+pub struct VChunks(pub Vec<Chank>);
 
 impl VChunks {
     // Intended for parsing a `Version`.
     fn parse(i: &str) -> IResult<&str, VChunks> {
         map(
             separated_list1(char('.'), Chank::parse_without_hyphens),
-            |s| VChunks(Chanks(s)),
+            VChunks,
         )(i)
     }
 }
@@ -966,13 +976,43 @@ impl PartialOrd for VChunks {
 
 impl Ord for VChunks {
     fn cmp(&self, other: &Self) -> Ordering {
-        todo!()
+        self.0
+            .iter()
+            .zip_longest(&other.0)
+            .find_map(|eob| match eob {
+                Both(a, b) => match a.cmp_lenient(&b) {
+                    Less => Some(Less),
+                    Greater => Some(Greater),
+                    Equal => None,
+                },
+                // From the Semver spec: A larger set of pre-release fields has
+                // a higher precedence than a smaller set, if all the preceding
+                // identifiers are equal.
+                Left(_) => Some(Greater),
+                Right(_) => Some(Less),
+            })
+            .unwrap_or(Equal)
     }
 }
 
 impl std::fmt::Display for VChunks {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+    // FIXME Fri Jan  7 11:44:50 2022
+    //
+    // Use `itersperse` here once it stabilises.
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.0.as_slice() {
+            [] => Ok(()),
+            [c] => write!(f, "{}", c),
+            [c, rest @ ..] => {
+                write!(f, "{}", c)?;
+
+                for r in rest {
+                    write!(f, ".{}", r)?;
+                }
+
+                Ok(())
+            }
+        }
     }
 }
 
@@ -1097,21 +1137,41 @@ impl Chank {
         //     _ => Some(MChunk::Plain(format!("{}", self))),
         // }
     }
-}
 
-impl PartialOrd for Chank {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Chank {
-    fn cmp(&self, other: &Self) -> Ordering {
+    fn cmp_semver(&self, other: &Self) -> Ordering {
         match (self, other) {
             (Chank::Numeric(a), Chank::Numeric(b)) => a.cmp(&b),
             (Chank::Numeric(_), Chank::Alphanum(_)) => Less,
             (Chank::Alphanum(_), Chank::Numeric(_)) => Greater,
             (Chank::Alphanum(a), Chank::Alphanum(b)) => a.cmp(&b),
+        }
+    }
+
+    fn cmp_lenient(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Chank::Numeric(a), Chank::Numeric(b)) => a.cmp(&b),
+            (a @ Chank::Alphanum(x), b @ Chank::Alphanum(y)) => {
+                match (a.single_digit_lenient(), b.single_digit_lenient()) {
+                    (Some(i), Some(j)) => i.cmp(&j),
+                    _ => x.cmp(&y),
+                }
+            }
+            (Chank::Numeric(n), b @ Chank::Alphanum(_)) => match b.single_digit_lenient() {
+                None => Greater,
+                Some(m) => match n.cmp(&m) {
+                    // 1.2.0 > 1.2.0rc1
+                    Equal => Greater,
+                    c => c,
+                },
+            },
+            (a @ Chank::Alphanum(_), Chank::Numeric(n)) => match a.single_digit_lenient() {
+                None => Less,
+                Some(m) => match m.cmp(&n) {
+                    // 1.2.0rc1 < 1.2.0
+                    Equal => Less,
+                    c => c,
+                },
+            },
         }
     }
 }
@@ -1121,45 +1181,6 @@ impl std::fmt::Display for Chank {
         match self {
             Chank::Numeric(n) => write!(f, "{}", n),
             Chank::Alphanum(a) => write!(f, "{}", a),
-        }
-    }
-}
-
-/// Multiple [`Chank`] values.
-///
-/// Defined as a newtype wrapper so that we can define custom parser and trait
-/// methods.
-///
-/// # Examples
-///
-/// - `123.abc-1bc.456`
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
-pub struct Chanks(pub Vec<Chank>);
-
-impl Chanks {
-    fn parse(i: &str) -> IResult<&str, Chanks> {
-        map(separated_list1(char('.'), Chank::parse), Chanks)(i)
-    }
-}
-
-impl std::fmt::Display for Chanks {
-    // FIXME Fri Jan  7 11:44:50 2022
-    //
-    // Use `itersperse` here once it stabilises.
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.0.as_slice() {
-            [] => Ok(()),
-            [c] => write!(f, "{}", c),
-            [c, rest @ ..] => {
-                write!(f, "{}", c)?;
-
-                for r in rest {
-                    write!(f, ".{}", r)?;
-                }
-
-                Ok(())
-            }
         }
     }
 }

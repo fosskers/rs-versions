@@ -45,6 +45,7 @@
 //! deserialization with the `serde` feature.
 
 #![allow(clippy::clippy::many_single_char_names)]
+#![warn(missing_docs)]
 #![doc(html_root_url = "https://docs.rs/versions/3.0.3")]
 
 use itertools::EitherOrBoth::{Both, Left, Right};
@@ -95,11 +96,14 @@ mod parsers;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Eq, Clone, Default)]
 pub struct SemVer {
+    /// The major version.
     pub major: u32,
+    /// The minor version.
     pub minor: u32,
+    /// The patch version.
     pub patch: u32,
     /// `Some` implies that the inner `Vec` of the `Chunks` is not empty.
-    pub pre_rel: Option<Chanks>,
+    pub pre_rel: Option<Release>,
     /// `Some` implies that the inner `String` is not empty.
     pub meta: Option<String>,
 }
@@ -124,11 +128,11 @@ impl SemVer {
     /// assert_eq!("1.2.3-r1+git123", format!("{}", ver));
     /// ```
     pub fn to_version(&self) -> Version {
-        let chunks = Chanks(vec![
+        let chunks = VChunks(Chanks(vec![
             Chank::Numeric(self.major),
             Chank::Numeric(self.minor),
             Chank::Numeric(self.patch),
-        ]);
+        ]));
 
         Version {
             epoch: None,
@@ -155,7 +159,7 @@ impl SemVer {
             MChunk::Digits(self.patch, self.patch.to_string()),
         ];
         let next = self.pre_rel.as_ref().map(|pr| {
-            let chunks = pr.0.iter().map(|c| c.mchunk()).collect();
+            let chunks = pr.0 .0.iter().map(|c| c.mchunk()).collect();
             let next = self.meta.as_ref().map(|meta| {
                 let chunks = vec![MChunk::Plain(meta.clone())];
                 (Sep::Plus, Box::new(Mess { chunks, next: None }))
@@ -194,7 +198,7 @@ impl SemVer {
                         // all been equal. If there is a fourth position, its
                         // type, not its value, will determine which overall
                         // version is greater.
-                        Some(Equal) => match other.chunks.0.get(3) {
+                        Some(Equal) => match other.chunks.0 .0.get(3) {
                             // 1.2.3 > 1.2.3.git
                             Some(Chank::Alphanum(_)) => Greater,
                             // 1.2.3 < 1.2.3.0
@@ -257,7 +261,7 @@ impl SemVer {
         let (i, minor) = parsers::unsigned(i)?;
         let (i, _) = char('.')(i)?;
         let (i, patch) = parsers::unsigned(i)?;
-        let (i, pre_rel) = opt(Chanks::parse_pre_rel)(i)?;
+        let (i, pre_rel) = opt(Release::parse)(i)?;
         let (i, meta) = opt(parsers::meta)(i)?;
 
         let sv = SemVer {
@@ -367,10 +371,19 @@ impl std::fmt::Display for SemVer {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Version {
+    /// An optional prefix that marks that some paradigm shift in versioning has
+    /// occurred between releases of some software.
     pub epoch: Option<u32>,
-    pub chunks: Chanks,
+    /// The main sections of the `Version`. Unlike [`SemVer`], these sections
+    /// are allowed to contain letters.
+    pub chunks: VChunks,
+    /// This either indicates a prerelease like [`SemVer`], or a "release"
+    /// revision for software packages. In the latter case, a version like
+    /// `1.2.3-2` implies that the software itself hasn't changed, but that this
+    /// is the second bundling/release (etc.) of that particular package.
+    pub release: Option<Release>,
+    /// Some extra metadata that doesn't factor into comparison.
     pub meta: Option<String>,
-    pub release: Option<Chanks>,
 }
 
 impl Version {
@@ -394,12 +407,16 @@ impl Version {
     /// assert_eq!(Some(4), mess.nth(2));
     /// ```
     pub fn nth(&self, n: usize) -> Option<u32> {
-        self.chunks.0.get(n).and_then(Chank::single_digit)
+        self.chunks.0 .0.get(n).and_then(Chank::single_digit)
     }
 
     /// Like `nth`, but pulls a number even if it was followed by letters.
     pub fn nth_lenient(&self, n: usize) -> Option<u32> {
-        self.chunks.0.get(n).and_then(Chank::single_digit_lenient)
+        self.chunks
+            .0
+             .0
+            .get(n)
+            .and_then(Chank::single_digit_lenient)
     }
 
     /// A lossless conversion from `Version` to [`Mess`].
@@ -425,9 +442,9 @@ impl Version {
 
     /// Convert to a `Mess` without considering the epoch.
     fn to_mess_continued(&self) -> Mess {
-        let chunks = self.chunks.0.iter().map(|c| c.mchunk()).collect();
+        let chunks = self.chunks.0 .0.iter().map(|c| c.mchunk()).collect();
         let next = self.release.as_ref().map(|cs| {
-            let chunks = cs.0.iter().map(|c| c.mchunk()).collect();
+            let chunks = cs.0 .0.iter().map(|c| c.mchunk()).collect();
             (Sep::Hyphen, Box::new(Mess { chunks, next: None }))
         });
         Mess { chunks, next }
@@ -484,8 +501,8 @@ impl Version {
     /// combination with other general `nom` parsers.
     pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
-        let (i, chunks) = Chanks::parse_major(i)?;
-        let (i, release) = opt(Chanks::parse_pre_rel)(i)?;
+        let (i, chunks) = VChunks::parse(i)?;
+        let (i, release) = opt(Release::parse)(i)?;
         let (i, meta) = opt(parsers::meta)(i)?;
 
         let v = Version {
@@ -587,7 +604,9 @@ impl std::fmt::Display for Version {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Mess {
+    /// The first section of a `Mess`.
     pub chunks: Vec<MChunk>,
+    /// The rest of the `Mess`.
     pub next: Option<(Sep, Box<Mess>)>,
 }
 
@@ -791,9 +810,13 @@ impl std::fmt::Display for MChunk {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Sep {
+    /// `:`
     Colon,
+    /// `-`
     Hyphen,
+    /// `+`
     Plus,
+    /// `_`
     Underscore,
 }
 
@@ -819,7 +842,9 @@ impl std::fmt::Display for Sep {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub enum Unit {
+    /// Bar
     Digits(u32),
+    /// Foo
     Letters(String),
 }
 
@@ -871,6 +896,86 @@ impl std::fmt::Display for Unit {
     }
 }
 
+/// [`Chunks`] that have comparison behaviour according to SemVer's rules for
+/// prereleases.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct Release(Chanks);
+
+impl Release {
+    fn parse(i: &str) -> IResult<&str, Release> {
+        let (i, _) = char('-')(i)?;
+        map(Chanks::parse, Release)(i)
+    }
+}
+
+impl PartialOrd for Release {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Release {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0
+             .0
+            .iter()
+            .zip_longest(&other.0 .0)
+            .find_map(|eob| match eob {
+                Both(a, b) => match a.cmp(&b) {
+                    Less => Some(Less),
+                    Greater => Some(Greater),
+                    Equal => None,
+                },
+                // From the Semver spec: A larger set of pre-release fields has
+                // a higher precedence than a smaller set, if all the preceding
+                // identifiers are equal.
+                Left(_) => Some(Greater),
+                Right(_) => Some(Less),
+            })
+            .unwrap_or(Equal)
+    }
+}
+
+impl std::fmt::Display for Release {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// [`Chunks`] that have a comparison behaviour specific to [`Version`].
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
+pub struct VChunks(Chanks);
+
+impl VChunks {
+    // Intended for parsing a `Version`.
+    fn parse(i: &str) -> IResult<&str, VChunks> {
+        map(
+            separated_list1(char('.'), Chank::parse_without_hyphens),
+            |s| VChunks(Chanks(s)),
+        )(i)
+    }
+}
+
+impl PartialOrd for VChunks {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for VChunks {
+    fn cmp(&self, other: &Self) -> Ordering {
+        todo!()
+    }
+}
+
+impl std::fmt::Display for VChunks {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A logical unit of a version number.
 ///
 /// Either entirely numerical (with no leading zeroes) or entirely
@@ -888,7 +993,9 @@ impl std::fmt::Display for Unit {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Chank {
+    /// A nice, pure number.
     Numeric(u32),
+    /// A mixture of letters, numbers, and hyphens.
     Alphanum(String),
 }
 
@@ -1033,46 +1140,6 @@ pub struct Chanks(pub Vec<Chank>);
 impl Chanks {
     fn parse(i: &str) -> IResult<&str, Chanks> {
         map(separated_list1(char('.'), Chank::parse), Chanks)(i)
-    }
-
-    // Intended for parsing a `Version`.
-    fn parse_major(i: &str) -> IResult<&str, Chanks> {
-        map(
-            separated_list1(char('.'), Chank::parse_without_hyphens),
-            Chanks,
-        )(i)
-    }
-
-    fn parse_pre_rel(i: &str) -> IResult<&str, Chanks> {
-        let (i, _) = char('-')(i)?;
-        Chanks::parse(i)
-    }
-}
-
-impl PartialOrd for Chanks {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Chanks {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0
-            .iter()
-            .zip_longest(&other.0)
-            .find_map(|eob| match eob {
-                Both(a, b) => match a.cmp(&b) {
-                    Less => Some(Less),
-                    Greater => Some(Greater),
-                    Equal => None,
-                },
-                // From the Semver spec: A larger set of pre-release fields has
-                // a higher precedence than a smaller set, if all the preceding
-                // identifiers are equal.
-                Left(_) => Some(Greater),
-                Right(_) => Some(Less),
-            })
-            .unwrap_or(Equal)
     }
 }
 
@@ -1351,8 +1418,11 @@ impl std::fmt::Display for Chunks {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Versioning {
+    /// Follows good parsing and comparison rules.
     Ideal(SemVer),
+    /// A little more permissive than [`SemVer`].
     General(Version),
+    /// Hope that you need not venture here.
     Complex(Mess),
 }
 

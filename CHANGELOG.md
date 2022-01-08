@@ -1,5 +1,25 @@
 # `versions` Changelog
 
+## 4.0.0 (2022-01-07)
+
+#### Added
+
+- The `Release` type.
+
+#### Changed
+
+- `SemVer` and `Version` have had their prerel field changed to `Release`.
+- The `Chunk` type has changed from a struct to an enum.
+
+#### Removed
+
+- The `Unit` type.
+
+#### Fixed
+
+- A bug involving zeroes in `SemVer` prereleases.
+- A bug involving the `Display` instance for `Version`.
+
 ## 3.0.3 (2021-08-23)
 
 #### Changed

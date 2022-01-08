@@ -51,10 +51,10 @@
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_while1};
-use nom::character::complete::{alpha1, alphanumeric1, char, digit1};
+use nom::bytes::complete::tag;
+use nom::character::complete::{alphanumeric1, char, digit1};
 use nom::combinator::{fail, map, map_res, opt, peek, recognize, value};
-use nom::multi::{many1, separated_list1};
+use nom::multi::separated_list1;
 use nom::IResult;
 use parsers::{alphanums, hyphenated_alphanums, unsigned};
 #[cfg(feature = "serde")]
@@ -634,9 +634,9 @@ impl Mess {
     }
 
     /// Like [`Mess::nth`], but tries to parse out a full [`Chunk`] instead.
-    fn nth_chunk(&self, x: usize) -> Option<Chunk> {
+    fn nth_chunk(&self, x: usize) -> Option<Chank> {
         let chunk = self.chunks.get(x)?.text();
-        let (i, c) = Chunk::parse(&Unit::string, chunk).ok()?;
+        let (i, c) = Chank::parse_without_hyphens(chunk).ok()?;
         match i {
             "" => Some(c),
             _ => None,
@@ -825,70 +825,6 @@ impl std::fmt::Display for Sep {
             Sep::Underscore => '_',
         };
         write!(f, "{}", c)
-    }
-}
-
-/// A single unit of a version number. May be digits or a string of characters.
-///
-/// Groups of these are called `Chunk`s, and are the identifiers separated by
-/// periods in the source.
-///
-/// Please avoid using the `Unit::Letters` constructor yourself. Instead
-/// consider the [`Unit::from_string`] method to verify the input.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
-pub enum Unit {
-    /// Bar
-    Digits(u32),
-    /// Foo
-    Letters(String),
-}
-
-impl Unit {
-    // TODO This can be made simpler once `bool::then_some` is merged into
-    // stable Rust.
-    /// Smart constructor for a `Unit` made of letters.
-    pub fn from_string(s: String) -> Option<Unit> {
-        s.chars()
-            .all(|c| c.is_ascii_alphabetic())
-            .then(|| Unit::Letters(s))
-    }
-
-    fn parse<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Unit>
-    where
-        F: Fn(&'b str) -> IResult<&'b str, Unit>,
-    {
-        alt((Unit::digits, f))(i)
-    }
-
-    fn digits(i: &str) -> IResult<&str, Unit> {
-        parsers::unsigned(i).map(|(i, x)| (i, Unit::Digits(x)))
-    }
-
-    /// Parsing `Unit`s that belong to the main section of a `Version`.
-    fn string(i: &str) -> IResult<&str, Unit> {
-        alpha1(i).map(|(i, s)| (i, Unit::Letters(s.to_string())))
-    }
-
-    /// Parsing `Unit`s that belong to the prerelease section.
-    fn string_with_hyphens(i: &str) -> IResult<&str, Unit> {
-        map(
-            take_while1(|c: char| c.is_ascii_alphabetic() || c == '-'),
-            |s: &str| Unit::Letters(s.to_owned()),
-        )(i)
-    }
-
-    fn single_zero(i: &str) -> IResult<&str, Unit> {
-        map_res(tag("0"), |s: &str| s.parse::<u32>().map(Unit::Digits))(i)
-    }
-}
-
-impl std::fmt::Display for Unit {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Unit::Digits(ns) => write!(f, "{}", ns),
-            Unit::Letters(cs) => write!(f, "{}", cs),
-        }
     }
 }
 
@@ -1182,241 +1118,6 @@ impl std::fmt::Display for Chank {
             Chank::Numeric(n) => write!(f, "{}", n),
             Chank::Alphanum(a) => write!(f, "{}", a),
         }
-    }
-}
-
-/// A logical unit of a version number.
-///
-/// Can consist of multiple letters and numbers. Groups of these (i.e.
-/// [`Chunks`]) are separated by periods to form a full version number.
-///
-/// Defined as a newtype wrapper so that we can define custom parser and trait
-/// methods.
-///
-/// # Examples
-///
-/// - `r3`
-/// - `0rc1`
-/// - `20150826`
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Chunk(pub Vec<Unit>);
-
-impl Chunk {
-    /// If this `Chunk` is made up of a single [`Unit::Digits`].
-    /// then pull out the inner value.
-    ///
-    /// ```
-    /// use versions::{Chunk, Unit};
-    ///
-    /// let v = Chunk(vec![Unit::Digits(1)]);
-    /// assert_eq!(Some(1), v.single_digit());
-    ///
-    /// let v = Chunk(vec![Unit::Letters("abc".to_string())]);
-    /// assert_eq!(None, v.single_digit());
-    ///
-    /// let v = Chunk(vec![Unit::Digits(1), Unit::Letters("abc".to_string())]);
-    /// assert_eq!(None, v.single_digit());
-    /// ```
-    pub fn single_digit(&self) -> Option<u32> {
-        match self.0.as_slice() {
-            [Unit::Digits(n)] => Some(*n),
-            _ => None,
-        }
-    }
-
-    /// Like [`Chunk::single_digit`], but will grab the `u32` even if there were
-    /// more values in the `Chunk`.
-    ///
-    /// ```
-    /// use versions::{Chunk, Unit};
-    ///
-    /// let v = Chunk(vec![Unit::Digits(1)]);
-    /// assert_eq!(Some(1), v.single_digit_lenient());
-    ///
-    /// let v = Chunk(vec![Unit::Letters("abc".to_string())]);
-    /// assert_eq!(None, v.single_digit_lenient());
-    ///
-    /// let v = Chunk(vec![Unit::Digits(0), Unit::Letters("a".to_string())]);
-    /// assert_eq!(Some(0), v.single_digit_lenient());
-    /// ```
-    pub fn single_digit_lenient(&self) -> Option<u32> {
-        match self.0.first() {
-            Some(Unit::Digits(n)) => Some(*n),
-            _ => None,
-        }
-    }
-
-    // In `Option` since there's no way to guarantee that the `Vec` isn't empty.
-    // We could use `nonempty::NonEmpty`, but that has pains in creating the
-    // `NonEmpty`, and also expands the API outside of std collections.
-    fn mchunk(&self) -> Option<MChunk> {
-        match self.0.as_slice() {
-            [] => None,
-            [Unit::Digits(u)] => Some(MChunk::Digits(*u, u.to_string())),
-            [Unit::Letters(s), Unit::Digits(u)] if s == "r" => {
-                Some(MChunk::Rev(*u, format!("r{}", u)))
-            }
-            [Unit::Letters(s)] => Some(MChunk::Plain(s.clone())),
-            _ => Some(MChunk::Plain(format!("{}", self))),
-        }
-    }
-
-    /// Does this `Chunk` start with a letter?
-    fn is_lettered(&self) -> bool {
-        matches!(self.0.as_slice(), [Unit::Letters(_), ..])
-    }
-
-    fn parse<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Chunk>
-    where
-        F: Fn(&'b str) -> IResult<&'b str, Unit>,
-    {
-        Chunk::units(f, i).map(|(i, v)| (i, Chunk(v)))
-    }
-
-    /// Handling `0` is a bit tricky. We can't allow runs of zeros in a chunk,
-    /// since a version like `1.000.1` would parse as `1.0.1`.
-    fn units<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Vec<Unit>>
-    where
-        F: Fn(&'b str) -> IResult<&'b str, Unit>,
-    {
-        alt((
-            |i| Chunk::zero_with_letters(f, i),
-            map(Unit::single_zero, |u| vec![u]),
-            many1(|i| Unit::parse(f, i)),
-        ))(i)
-    }
-
-    fn zero_with_letters<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Vec<Unit>>
-    where
-        F: Fn(&'b str) -> IResult<&'b str, Unit>,
-    {
-        let (i, z) = Unit::single_zero(i)?;
-        let (i, s) = Unit::string(i)?;
-        let (i, c) = opt(|i| Chunk::units(f, i))(i)?;
-
-        let mut us = vec![z, s];
-        if let Some(x) = c {
-            us.extend(x);
-        }
-
-        Ok((i, us))
-    }
-}
-
-impl PartialOrd for Chunk {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-/// A custom implementation.
-impl Ord for Chunk {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0
-            .iter()
-            .zip_longest(&other.0)
-            .find_map(|eob| match eob {
-                // Different from the `Ord` instance of `Chunks`, if we've
-                // iterated this far and one side has fewer chunks, it must be
-                // the "greater" version. A Chunk break only occurs in a switch
-                // from digits to letters and vice versa, so anything "extra"
-                // must be an `rc` marking or similar. Consider `1.1` compared
-                // to `1.1rc1`.
-                Left(_) => Some(Less),
-                Right(_) => Some(Greater),
-                // The usual case where the `Unit` types match, as in `1.2.3.4`
-                // vs `1.2.4.0`.
-                Both(Unit::Digits(a), Unit::Digits(b)) => match a.cmp(b) {
-                    Equal => None,
-                    ord => Some(ord),
-                },
-                Both(Unit::Letters(a), Unit::Letters(b)) => match a.cmp(b) {
-                    Equal => None,
-                    ord => Some(ord),
-                },
-                // The arbitrary decision to prioritize Letters over Digits has
-                // the effect of allowing this instance to work for `SemVer` as
-                // well as `Version`.
-                Both(Unit::Digits(_), Unit::Letters(_)) => Some(Less),
-                Both(Unit::Letters(_), Unit::Digits(_)) => Some(Greater),
-            })
-            .unwrap_or(Equal)
-    }
-}
-
-impl std::fmt::Display for Chunk {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        for u in &self.0 {
-            write!(f, "{}", u)?;
-        }
-        Ok(())
-    }
-}
-
-/// Multiple [`Chunk`] values.
-///
-/// Defined as a newtype wrapper so that we can define custom parser and trait
-/// methods.
-///
-/// # Examples
-///
-/// - `123.abc.456`
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
-pub struct Chunks(pub Vec<Chunk>);
-
-impl Chunks {
-    fn parse<'a, 'b, F>(f: &'a F, i: &'b str) -> IResult<&'b str, Chunks>
-    where
-        F: Fn(&'b str) -> IResult<&'b str, Unit>,
-    {
-        let (i, cs) = separated_list1(char('.'), |i| Chunk::parse(f, i))(i)?;
-        Ok((i, Chunks(cs)))
-    }
-
-    fn pre_rel(i: &str) -> IResult<&str, Chunks> {
-        let (i, _) = char('-')(i)?;
-        Chunks::parse(&Unit::string_with_hyphens, i)
-    }
-}
-
-impl PartialOrd for Chunks {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Chunks {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0
-            .iter()
-            .zip_longest(&other.0)
-            .find_map(|eob| match eob {
-                // If all chunks up until this point were equal, but one side
-                // continues on with "lettered" sections, these are considered
-                // to be indicating a beta/prerelease, and thus are *less* than
-                // the side who already ran out of chunks.
-                Left(c) if c.is_lettered() => Some(Less),
-                Right(c) if c.is_lettered() => Some(Greater),
-                // If one side has run out of chunks to compare but the other
-                // hasn't, the other must be newer.
-                Left(_) => Some(Greater),
-                Right(_) => Some(Less),
-                // The usual case.
-                Both(a, b) => match a.cmp(b) {
-                    Equal => None,
-                    ord => Some(ord),
-                },
-            })
-            .unwrap_or(Equal)
-    }
-}
-
-impl std::fmt::Display for Chunks {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let s: String = self.0.iter().map(|c| format!("{}", c)).join(".");
-        write!(f, "{}", s)
     }
 }
 

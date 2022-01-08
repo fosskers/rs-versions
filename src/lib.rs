@@ -129,9 +129,9 @@ impl SemVer {
     /// ```
     pub fn to_version(&self) -> Version {
         let chunks = VChunks(vec![
-            Chank::Numeric(self.major),
-            Chank::Numeric(self.minor),
-            Chank::Numeric(self.patch),
+            Chunk::Numeric(self.major),
+            Chunk::Numeric(self.minor),
+            Chunk::Numeric(self.patch),
         ]);
 
         Version {
@@ -200,9 +200,9 @@ impl SemVer {
                         // version is greater.
                         Some(Equal) => match other.chunks.0.get(3) {
                             // 1.2.3 > 1.2.3.git
-                            Some(Chank::Alphanum(_)) => Greater,
+                            Some(Chunk::Alphanum(_)) => Greater,
                             // 1.2.3 < 1.2.3.0
-                            Some(Chank::Numeric(_)) => Less,
+                            Some(Chunk::Numeric(_)) => Less,
                             None => self.pre_rel.cmp(&other.release),
                         },
                     },
@@ -407,12 +407,12 @@ impl Version {
     /// assert_eq!(Some(4), mess.nth(2));
     /// ```
     pub fn nth(&self, n: usize) -> Option<u32> {
-        self.chunks.0.get(n).and_then(Chank::single_digit)
+        self.chunks.0.get(n).and_then(Chunk::single_digit)
     }
 
     /// Like `nth`, but pulls a number even if it was followed by letters.
     pub fn nth_lenient(&self, n: usize) -> Option<u32> {
-        self.chunks.0.get(n).and_then(Chank::single_digit_lenient)
+        self.chunks.0.get(n).and_then(Chunk::single_digit_lenient)
     }
 
     /// A lossless conversion from `Version` to [`Mess`].
@@ -634,9 +634,9 @@ impl Mess {
     }
 
     /// Like [`Mess::nth`], but tries to parse out a full [`Chunk`] instead.
-    fn nth_chunk(&self, x: usize) -> Option<Chank> {
+    fn nth_chunk(&self, x: usize) -> Option<Chunk> {
         let chunk = self.chunks.get(x)?.text();
-        let (i, c) = Chank::parse_without_hyphens(chunk).ok()?;
+        let (i, c) = Chunk::parse_without_hyphens(chunk).ok()?;
         match i {
             "" => Some(c),
             _ => None,
@@ -832,12 +832,12 @@ impl std::fmt::Display for Sep {
 /// prereleases.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Release(pub Vec<Chank>);
+pub struct Release(pub Vec<Chunk>);
 
 impl Release {
     fn parse(i: &str) -> IResult<&str, Release> {
         let (i, _) = char('-')(i)?;
-        map(separated_list1(char('.'), Chank::parse), Release)(i)
+        map(separated_list1(char('.'), Chunk::parse), Release)(i)
     }
 }
 
@@ -892,13 +892,13 @@ impl std::fmt::Display for Release {
 /// [`Chunk`]s that have a comparison behaviour specific to [`Version`].
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
-pub struct VChunks(pub Vec<Chank>);
+pub struct VChunks(pub Vec<Chunk>);
 
 impl VChunks {
     // Intended for parsing a `Version`.
     fn parse(i: &str) -> IResult<&str, VChunks> {
         map(
-            separated_list1(char('.'), Chank::parse_without_hyphens),
+            separated_list1(char('.'), Chunk::parse_without_hyphens),
             VChunks,
         )(i)
     }
@@ -957,7 +957,7 @@ impl std::fmt::Display for VChunks {
 /// Either entirely numerical (with no leading zeroes) or entirely
 /// alphanumerical (with a free mixture of numbers, letters, and hyphens).
 ///
-/// Groups of these (i.e. [`Chunks`]) are separated by periods to form a full
+/// Groups of these (like [`Release`]) are separated by periods to form a full
 /// section of a version number.
 ///
 /// # Examples
@@ -968,33 +968,33 @@ impl std::fmt::Display for VChunks {
 /// - `0rc1-abc3`
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum Chank {
+pub enum Chunk {
     /// A nice, pure number.
     Numeric(u32),
     /// A mixture of letters, numbers, and hyphens.
     Alphanum(String),
 }
 
-impl Chank {
+impl Chunk {
     /// If this `Chunk` is made up of a single digit, then pull out the inner
     /// value.
     ///
     /// ```
-    /// use versions::{Chunk, Unit};
+    /// use versions::Chunk;
     ///
-    /// let v = Chunk(vec![Unit::Digits(1)]);
+    /// let v = Chunk::Numeric(1);
     /// assert_eq!(Some(1), v.single_digit());
     ///
-    /// let v = Chunk(vec![Unit::Letters("abc".to_string())]);
+    /// let v = Chunk::Alphanum("abc".to_string());
     /// assert_eq!(None, v.single_digit());
     ///
-    /// let v = Chunk(vec![Unit::Digits(1), Unit::Letters("abc".to_string())]);
+    /// let v = Chunk::Alphanum("1abc".to_string());
     /// assert_eq!(None, v.single_digit());
     /// ```
     pub fn single_digit(&self) -> Option<u32> {
         match self {
-            Chank::Numeric(n) => Some(*n),
-            Chank::Alphanum(_) => None,
+            Chunk::Numeric(n) => Some(*n),
+            Chunk::Alphanum(_) => None,
         }
     }
 
@@ -1002,57 +1002,57 @@ impl Chank {
     /// followed by letters.
     ///
     /// ```
-    /// use versions::{Chunk, Unit};
+    /// use versions::Chunk;
     ///
-    /// let v = Chunk(vec![Unit::Digits(1)]);
+    /// let v = Chunk::Numeric(1);
     /// assert_eq!(Some(1), v.single_digit_lenient());
     ///
-    /// let v = Chunk(vec![Unit::Letters("abc".to_string())]);
+    /// let v = Chunk::Alphanum("abc".to_string());
     /// assert_eq!(None, v.single_digit_lenient());
     ///
-    /// let v = Chunk(vec![Unit::Digits(0), Unit::Letters("a".to_string())]);
-    /// assert_eq!(Some(0), v.single_digit_lenient());
+    /// let v = Chunk::Alphanum("1abc".to_string());
+    /// assert_eq!(Some(1), v.single_digit_lenient());
     /// ```
     pub fn single_digit_lenient(&self) -> Option<u32> {
         match self {
-            Chank::Numeric(n) => Some(*n),
-            Chank::Alphanum(s) => unsigned(s).ok().map(|(_, n)| n),
+            Chunk::Numeric(n) => Some(*n),
+            Chunk::Alphanum(s) => unsigned(s).ok().map(|(_, n)| n),
         }
     }
 
-    fn parse(i: &str) -> IResult<&str, Chank> {
-        alt((Chank::alphanum, Chank::numeric))(i)
+    fn parse(i: &str) -> IResult<&str, Chunk> {
+        alt((Chunk::alphanum, Chunk::numeric))(i)
     }
 
-    fn parse_without_hyphens(i: &str) -> IResult<&str, Chank> {
-        alt((Chank::alphanum_without_hyphens, Chank::numeric))(i)
+    fn parse_without_hyphens(i: &str) -> IResult<&str, Chunk> {
+        alt((Chunk::alphanum_without_hyphens, Chunk::numeric))(i)
     }
 
     // A clever interpretation of the grammar of "alphanumeric identifier".
     // Instead of having a big, composed parser that structurally accounts for
     // the presence of a "non-digit", we just check for one after the fact.
-    fn alphanum(i: &str) -> IResult<&str, Chank> {
+    fn alphanum(i: &str) -> IResult<&str, Chunk> {
         let (i2, ids) = hyphenated_alphanums(i)?;
 
         if ids.contains(|c: char| c.is_ascii_alphabetic() || c == '-') {
-            Ok((i2, Chank::Alphanum(ids.to_string())))
+            Ok((i2, Chunk::Alphanum(ids.to_string())))
         } else {
             fail(i)
         }
     }
 
-    fn alphanum_without_hyphens(i: &str) -> IResult<&str, Chank> {
+    fn alphanum_without_hyphens(i: &str) -> IResult<&str, Chunk> {
         let (i2, ids) = alphanums(i)?;
 
         if ids.contains(|c: char| c.is_ascii_alphabetic()) {
-            Ok((i2, Chank::Alphanum(ids.to_string())))
+            Ok((i2, Chunk::Alphanum(ids.to_string())))
         } else {
             fail(i)
         }
     }
 
-    fn numeric(i: &str) -> IResult<&str, Chank> {
-        map(unsigned, Chank::Numeric)(i)
+    fn numeric(i: &str) -> IResult<&str, Chunk> {
+        map(unsigned, Chunk::Numeric)(i)
     }
 
     fn mchunk(&self) -> MChunk {
@@ -1060,8 +1060,8 @@ impl Chank {
         //
         // Is there going to be an issue here, having not accounted for an `r`?
         match self {
-            Chank::Numeric(n) => MChunk::Digits(*n, n.to_string()),
-            Chank::Alphanum(s) => MChunk::Plain(s.clone()),
+            Chunk::Numeric(n) => MChunk::Digits(*n, n.to_string()),
+            Chunk::Alphanum(s) => MChunk::Plain(s.clone()),
         }
         // match self.0.as_slice() {
         //     [] => None,
@@ -1076,23 +1076,23 @@ impl Chank {
 
     fn cmp_semver(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (Chank::Numeric(a), Chank::Numeric(b)) => a.cmp(&b),
-            (Chank::Numeric(_), Chank::Alphanum(_)) => Less,
-            (Chank::Alphanum(_), Chank::Numeric(_)) => Greater,
-            (Chank::Alphanum(a), Chank::Alphanum(b)) => a.cmp(&b),
+            (Chunk::Numeric(a), Chunk::Numeric(b)) => a.cmp(&b),
+            (Chunk::Numeric(_), Chunk::Alphanum(_)) => Less,
+            (Chunk::Alphanum(_), Chunk::Numeric(_)) => Greater,
+            (Chunk::Alphanum(a), Chunk::Alphanum(b)) => a.cmp(&b),
         }
     }
 
     fn cmp_lenient(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (Chank::Numeric(a), Chank::Numeric(b)) => a.cmp(&b),
-            (a @ Chank::Alphanum(x), b @ Chank::Alphanum(y)) => {
+            (Chunk::Numeric(a), Chunk::Numeric(b)) => a.cmp(&b),
+            (a @ Chunk::Alphanum(x), b @ Chunk::Alphanum(y)) => {
                 match (a.single_digit_lenient(), b.single_digit_lenient()) {
                     (Some(i), Some(j)) => i.cmp(&j),
                     _ => x.cmp(&y),
                 }
             }
-            (Chank::Numeric(n), b @ Chank::Alphanum(_)) => match b.single_digit_lenient() {
+            (Chunk::Numeric(n), b @ Chunk::Alphanum(_)) => match b.single_digit_lenient() {
                 None => Greater,
                 Some(m) => match n.cmp(&m) {
                     // 1.2.0 > 1.2.0rc1
@@ -1100,7 +1100,7 @@ impl Chank {
                     c => c,
                 },
             },
-            (a @ Chank::Alphanum(_), Chank::Numeric(n)) => match a.single_digit_lenient() {
+            (a @ Chunk::Alphanum(_), Chunk::Numeric(n)) => match a.single_digit_lenient() {
                 None => Less,
                 Some(m) => match m.cmp(&n) {
                     // 1.2.0rc1 < 1.2.0
@@ -1112,11 +1112,11 @@ impl Chank {
     }
 }
 
-impl std::fmt::Display for Chank {
+impl std::fmt::Display for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Chank::Numeric(n) => write!(f, "{}", n),
-            Chank::Alphanum(a) => write!(f, "{}", a),
+            Chunk::Numeric(n) => write!(f, "{}", n),
+            Chunk::Alphanum(a) => write!(f, "{}", a),
         }
     }
 }
@@ -1261,18 +1261,18 @@ mod tests {
 
     #[test]
     fn chanks() {
-        assert_eq!(Ok(("", Chank::Numeric(123))), Chank::parse("123"));
+        assert_eq!(Ok(("", Chunk::Numeric(123))), Chunk::parse("123"));
         assert_eq!(
-            Ok(("", Chank::Alphanum("123a".to_string()))),
-            Chank::parse("123a")
+            Ok(("", Chunk::Alphanum("123a".to_string()))),
+            Chunk::parse("123a")
         );
         assert_eq!(
-            Ok(("", Chank::Alphanum("123-456".to_string()))),
-            Chank::parse("123-456")
+            Ok(("", Chunk::Alphanum("123-456".to_string()))),
+            Chunk::parse("123-456")
         );
         assert_eq!(
-            Ok(("", Chank::Alphanum("00a".to_string()))),
-            Chank::parse("00a")
+            Ok(("", Chunk::Alphanum("00a".to_string()))),
+            Chunk::parse("00a")
         );
     }
 

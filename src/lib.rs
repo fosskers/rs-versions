@@ -128,7 +128,7 @@ impl SemVer {
     /// assert_eq!("1.2.3-r1+git123", format!("{}", ver));
     /// ```
     pub fn to_version(&self) -> Version {
-        let chunks = VChunks(vec![
+        let chunks = Chunks(vec![
             Chunk::Numeric(self.major),
             Chunk::Numeric(self.minor),
             Chunk::Numeric(self.patch),
@@ -376,7 +376,7 @@ pub struct Version {
     pub epoch: Option<u32>,
     /// The main sections of the `Version`. Unlike [`SemVer`], these sections
     /// are allowed to contain letters.
-    pub chunks: VChunks,
+    pub chunks: Chunks,
     /// This either indicates a prerelease like [`SemVer`], or a "release"
     /// revision for software packages. In the latter case, a version like
     /// `1.2.3-2` implies that the software itself hasn't changed, but that this
@@ -497,7 +497,7 @@ impl Version {
     /// combination with other general `nom` parsers.
     pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch)(i)?;
-        let (i, chunks) = VChunks::parse(i)?;
+        let (i, chunks) = Chunks::parse(i)?;
         let (i, release) = opt(Release::parse)(i)?;
         let (i, meta) = opt(parsers::meta)(i)?;
 
@@ -571,7 +571,7 @@ impl std::fmt::Display for Version {
 /// With `Mess`, groups of letters/numbers are separated by a period, but can be
 /// further separated by the symbols `_-+:`.
 ///
-/// Unfortunately, [`Chunks`] cannot be used here, as some developers have
+/// Unfortunately, [`Chunk`] cannot be used here, as some developers have
 /// numbers like `1.003.04` which make parsers quite sad.
 ///
 /// Some `Mess` values have a shape that is tantalizingly close to a [`SemVer`].
@@ -892,25 +892,25 @@ impl std::fmt::Display for Release {
 /// [`Chunk`]s that have a comparison behaviour specific to [`Version`].
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
-pub struct VChunks(pub Vec<Chunk>);
+pub struct Chunks(pub Vec<Chunk>);
 
-impl VChunks {
+impl Chunks {
     // Intended for parsing a `Version`.
-    fn parse(i: &str) -> IResult<&str, VChunks> {
+    fn parse(i: &str) -> IResult<&str, Chunks> {
         map(
             separated_list1(char('.'), Chunk::parse_without_hyphens),
-            VChunks,
+            Chunks,
         )(i)
     }
 }
 
-impl PartialOrd for VChunks {
+impl PartialOrd for Chunks {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for VChunks {
+impl Ord for Chunks {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0
             .iter()
@@ -931,7 +931,7 @@ impl Ord for VChunks {
     }
 }
 
-impl std::fmt::Display for VChunks {
+impl std::fmt::Display for Chunks {
     // FIXME Fri Jan  7 11:44:50 2022
     //
     // Use `itersperse` here once it stabilises.

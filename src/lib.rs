@@ -62,6 +62,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::hash::{Hash, Hasher};
+use std::str::FromStr;
 
 mod parsers;
 
@@ -341,6 +342,29 @@ impl std::fmt::Display for SemVer {
     }
 }
 
+impl FromStr for SemVer {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        SemVer::new(s).ok_or(())
+    }
+}
+
+impl TryFrom<&str> for SemVer {
+    type Error = ();
+
+    /// ```
+    /// use versions::SemVer;
+    ///
+    /// let orig = "1.2.3";
+    /// let prsd: SemVer = orig.try_into().unwrap();
+    /// assert_eq!(orig, prsd.to_string());
+    /// ```
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        SemVer::from_str(value)
+    }
+}
+
 /// A version number with decent structure and comparison logic.
 ///
 /// This is a *descriptive* scheme, meaning that it encapsulates the most
@@ -562,6 +586,29 @@ impl std::fmt::Display for Version {
     }
 }
 
+impl FromStr for Version {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Version::new(s).ok_or(())
+    }
+}
+
+impl TryFrom<&str> for Version {
+    type Error = ();
+
+    /// ```
+    /// use versions::Version;
+    ///
+    /// let orig = "1.2.3.4";
+    /// let prsd: Version = orig.try_into().unwrap();
+    /// assert_eq!(orig, prsd.to_string());
+    /// ```
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Version::from_str(value)
+    }
+}
+
 /// A complex version number with no specific structure.
 ///
 /// Like [`Version`] this is a *descriptive* scheme, but it is based on examples
@@ -704,6 +751,29 @@ impl std::fmt::Display for Mess {
         }
 
         Ok(())
+    }
+}
+
+impl FromStr for Mess {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Mess::new(s).ok_or(())
+    }
+}
+
+impl TryFrom<&str> for Mess {
+    type Error = ();
+
+    /// ```
+    /// use versions::Mess;
+    ///
+    /// let orig = "1.2.3.4_123_abc+101a";
+    /// let prsd: Mess = orig.try_into().unwrap();
+    /// assert_eq!(orig, prsd.to_string());
+    /// ```
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Mess::from_str(value)
     }
 }
 
@@ -1246,6 +1316,29 @@ impl std::fmt::Display for Versioning {
             Versioning::General(v) => write!(f, "{}", v),
             Versioning::Complex(m) => write!(f, "{}", m),
         }
+    }
+}
+
+impl FromStr for Versioning {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Versioning::new(s).ok_or(())
+    }
+}
+
+impl TryFrom<&str> for Versioning {
+    type Error = ();
+
+    /// ```
+    /// use versions::Versioning;
+    ///
+    /// let orig = "1.2.3";
+    /// let prsd: Versioning = orig.try_into().unwrap();
+    /// assert_eq!(orig, prsd.to_string());
+    /// ```
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Versioning::from_str(value)
     }
 }
 

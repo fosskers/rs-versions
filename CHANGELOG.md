@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## 4.1.0 (2022-04-21)
+
+#### Added
+
+- `FromStr` and `TryFrom` instances for each type.
+
 ## 4.0.0 (2022-01-07)
 
 #### Added

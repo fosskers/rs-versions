@@ -1,5 +1,15 @@
 # `versions` Changelog
 
+## 5.0.0 (2023-05-09)
+
+This introduces a very small, technically breaking change to the API involving a
+single type. If you're just doing basic parsing and comparisons and not actually
+inspecting the types themselves, you shouldn't notice a difference.
+
+#### Changed
+
+- Versions with `~` in their metadata will now parse as a `Mess`. Example: `12.0.0-3ubuntu1~20.04.5`
+
 ## 4.1.0 (2022-04-21)
 
 #### Added

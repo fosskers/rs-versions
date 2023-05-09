@@ -717,6 +717,7 @@ impl Mess {
             value(Sep::Hyphen, char('-')),
             value(Sep::Plus, char('+')),
             value(Sep::Underscore, char('_')),
+            value(Sep::Tilde, char('~')),
         ))(i)
     }
 }
@@ -871,6 +872,7 @@ impl std::fmt::Display for MChunk {
 ///
 /// - A colon (:). Often denotes an "epoch".
 /// - A hyphen (-).
+/// - A tilde (~). Example: `12.0.0-3ubuntu1~20.04.5`
 /// - A plus (+). Stop using this outside of metadata if you are. Example: `10.2+0.93+1-1`
 /// - An underscore (_). Stop using this if you are.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -884,6 +886,8 @@ pub enum Sep {
     Plus,
     /// `_`
     Underscore,
+    /// `~`
+    Tilde,
 }
 
 impl std::fmt::Display for Sep {
@@ -893,6 +897,7 @@ impl std::fmt::Display for Sep {
             Sep::Hyphen => '-',
             Sep::Plus => '+',
             Sep::Underscore => '_',
+            Sep::Tilde => '~',
         };
         write!(f, "{}", c)
     }
@@ -1524,6 +1529,7 @@ mod tests {
             "1.002.3+r003",
             "1.3.00.16851-1",
             "5.2.458699.0906-1",
+            "12.0.0-3ubuntu1~20.04.5",
         ];
 
         for s in messes {

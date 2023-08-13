@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## 5.0.1 (2023-08-13)
+
+#### Changed
+
+- Bumped `itertools` dependency.
+
 ## 5.0.0 (2023-05-09)
 
 This introduces a very small, technically breaking change to the API involving a

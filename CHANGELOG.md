@@ -1,6 +1,8 @@
 # `versions` Changelog
 
-## Unreleased
+## 6.0.0 (2023-12-06)
+
+While technically a breaking change, most users should not notice.
 
 #### Changed
 

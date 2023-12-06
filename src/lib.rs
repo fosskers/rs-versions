@@ -66,6 +66,31 @@ use std::str::FromStr;
 
 mod parsers;
 
+/// Errors unique to the parsing of version numbers.
+#[derive(Debug, Clone)]
+pub enum Error {
+    /// Some string failed to parse into a [`SemVer`] via functions like
+    /// [`FromStr::from_str`] or [`TryFrom::try_from`].
+    IllegalSemver(String),
+    /// Some string failed to parse into a [`Version`].
+    IllegalVersion(String),
+    /// Some string failed to parse into a [`Mess`].
+    IllegalMess(String),
+    /// Some string failed to parse into a [`Versioning`].
+    IllegalVersioning(String),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::IllegalSemver(s) => write!(f, "Illegal SemVer: {s}"),
+            Error::IllegalVersion(s) => write!(f, "Illegal Version: {s}"),
+            Error::IllegalMess(s) => write!(f, "Illegal Mess: {s}"),
+            Error::IllegalVersioning(s) => write!(f, "Illegal Versioning: {s}"),
+        }
+    }
+}
+
 /// An ideal version number that conforms to Semantic Versioning.
 ///
 /// This is a *prescriptive* scheme, meaning that it follows the [SemVer
@@ -343,15 +368,15 @@ impl std::fmt::Display for SemVer {
 }
 
 impl FromStr for SemVer {
-    type Err = ();
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        SemVer::new(s).ok_or(())
+        SemVer::new(s).ok_or_else(|| Error::IllegalSemver(s.to_string()))
     }
 }
 
 impl TryFrom<&str> for SemVer {
-    type Error = ();
+    type Error = Error;
 
     /// ```
     /// use versions::SemVer;
@@ -587,15 +612,15 @@ impl std::fmt::Display for Version {
 }
 
 impl FromStr for Version {
-    type Err = ();
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Version::new(s).ok_or(())
+        Version::new(s).ok_or_else(|| Error::IllegalVersion(s.to_string()))
     }
 }
 
 impl TryFrom<&str> for Version {
-    type Error = ();
+    type Error = Error;
 
     /// ```
     /// use versions::Version;
@@ -756,15 +781,15 @@ impl std::fmt::Display for Mess {
 }
 
 impl FromStr for Mess {
-    type Err = ();
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Mess::new(s).ok_or(())
+        Mess::new(s).ok_or_else(|| Error::IllegalMess(s.to_string()))
     }
 }
 
 impl TryFrom<&str> for Mess {
-    type Error = ();
+    type Error = Error;
 
     /// ```
     /// use versions::Mess;
@@ -1325,15 +1350,15 @@ impl std::fmt::Display for Versioning {
 }
 
 impl FromStr for Versioning {
-    type Err = ();
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Versioning::new(s).ok_or(())
+        Versioning::new(s).ok_or_else(|| Error::IllegalVersioning(s.to_string()))
     }
 }
 
 impl TryFrom<&str> for Versioning {
-    type Error = ();
+    type Error = Error;
 
     /// ```
     /// use versions::Versioning;

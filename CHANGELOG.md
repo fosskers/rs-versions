@@ -1,5 +1,12 @@
 # `versions` Changelog
 
+## Unreleased
+
+#### Changed
+
+- The `Err` / `Error` associated types for automatic conversion of strings into
+  proper version types have been changed from `()` to a proper `Error` enum.
+
 ## 5.0.1 (2023-08-13)
 
 #### Changed

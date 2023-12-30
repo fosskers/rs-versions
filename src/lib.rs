@@ -44,7 +44,7 @@
 //! You can enable [`Serde`](https://serde.rs/) support for serialization and
 //! deserialization with the `serde` feature.
 
-#![allow(clippy::clippy::many_single_char_names)]
+#![allow(clippy::many_single_char_names)]
 #![warn(missing_docs)]
 #![doc(html_root_url = "https://docs.rs/versions/6.0.0")]
 
@@ -345,7 +345,7 @@ impl Ord for SemVer {
                 (None, None) => Equal,
                 (None, _) => Greater,
                 (_, None) => Less,
-                (Some(ap), Some(bp)) => ap.cmp(&bp),
+                (Some(ap), Some(bp)) => ap.cmp(bp),
             },
         }
     }
@@ -508,7 +508,7 @@ impl Version {
                     // The Mess's epoch is a letter, etc.
                     None => Greater,
                     Some(me) => match e.cmp(&me) {
-                        Equal => Version::cmp_mess_continued(self, &m),
+                        Equal => Version::cmp_mess_continued(self, m),
                         ord => ord,
                     },
                 },
@@ -520,7 +520,7 @@ impl Version {
             // The `Version` has an epoch but the `Mess` doesn't. Or if it does,
             // it's malformed.
             Some(e) if e > 0 => Greater,
-            _ => Version::cmp_mess_continued(self, &other),
+            _ => Version::cmp_mess_continued(self, other),
         }
     }
 
@@ -953,7 +953,7 @@ impl Ord for Release {
             .iter()
             .zip_longest(&other.0)
             .find_map(|eob| match eob {
-                Both(a, b) => match a.cmp_semver(&b) {
+                Both(a, b) => match a.cmp_semver(b) {
                     Less => Some(Less),
                     Greater => Some(Greater),
                     Equal => None,
@@ -1016,7 +1016,7 @@ impl Ord for Chunks {
             .iter()
             .zip_longest(&other.0)
             .find_map(|eob| match eob {
-                Both(a, b) => match a.cmp_lenient(&b) {
+                Both(a, b) => match a.cmp_lenient(b) {
                     Less => Some(Less),
                     Greater => Some(Greater),
                     Equal => None,
@@ -1176,20 +1176,20 @@ impl Chunk {
 
     fn cmp_semver(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (Chunk::Numeric(a), Chunk::Numeric(b)) => a.cmp(&b),
+            (Chunk::Numeric(a), Chunk::Numeric(b)) => a.cmp(b),
             (Chunk::Numeric(_), Chunk::Alphanum(_)) => Less,
             (Chunk::Alphanum(_), Chunk::Numeric(_)) => Greater,
-            (Chunk::Alphanum(a), Chunk::Alphanum(b)) => a.cmp(&b),
+            (Chunk::Alphanum(a), Chunk::Alphanum(b)) => a.cmp(b),
         }
     }
 
     fn cmp_lenient(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (Chunk::Numeric(a), Chunk::Numeric(b)) => a.cmp(&b),
+            (Chunk::Numeric(a), Chunk::Numeric(b)) => a.cmp(b),
             (a @ Chunk::Alphanum(x), b @ Chunk::Alphanum(y)) => {
                 match (a.single_digit_lenient(), b.single_digit_lenient()) {
                     (Some(i), Some(j)) => i.cmp(&j),
-                    _ => x.cmp(&y),
+                    _ => x.cmp(y),
                 }
             }
             (Chunk::Numeric(n), b @ Chunk::Alphanum(_)) => match b.single_digit_lenient() {
@@ -1202,7 +1202,7 @@ impl Chunk {
             },
             (a @ Chunk::Alphanum(_), Chunk::Numeric(n)) => match a.single_digit_lenient() {
                 None => Less,
-                Some(m) => match m.cmp(&n) {
+                Some(m) => match m.cmp(n) {
                     // 1.2.0rc1 < 1.2.0
                     Equal => Less,
                     c => c,

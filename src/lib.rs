@@ -57,8 +57,9 @@ use nom::combinator::{fail, map, map_res, opt, peek, recognize, value};
 use nom::multi::separated_list1;
 use nom::IResult;
 use parsers::{alphanums, hyphenated_alphanums, unsigned};
+use semver::Op;
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::hash::{Hash, Hasher};
@@ -78,6 +79,8 @@ pub enum Error {
     IllegalMess(String),
     /// Some string failed to parse into a [`Versioning`].
     IllegalVersioning(String),
+    /// An operator failed to parse into a [`semver::Op`].
+    IllegalOp(String),
 }
 
 impl std::fmt::Display for Error {
@@ -87,6 +90,7 @@ impl std::fmt::Display for Error {
             Error::IllegalVersion(s) => write!(f, "Illegal Version: {s}"),
             Error::IllegalMess(s) => write!(f, "Illegal Mess: {s}"),
             Error::IllegalVersioning(s) => write!(f, "Illegal Versioning: {s}"),
+            Error::IllegalOp(s) => write!(f, "Illegal Op: {s}"),
         }
     }
 }
@@ -1378,6 +1382,289 @@ impl Default for Versioning {
     }
 }
 
+#[cfg(feature = "serde")]
+pub fn versioning_from_string<'de, D>(deserializer: D) -> Result<Versioning, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+
+    Versioning::new(&s)
+        .ok_or_else(|| Err(Error::IllegalVersioning(s)))
+        .map_err(D::Error::custom)
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+/// A version requirement expression, like `^1.4.163`. Equivalent to a `VersionReq` for
+/// a `Versioning` instead of a semver `Version`.
+pub struct VersioningReq {
+    /// The version requirement operation, or `None` if the operation is `*`.
+    op: Op,
+    /// The version requirement expression
+    version: Option<Versioning>,
+}
+
+impl VersioningReq {
+    /// Create a new `VersioningReq` from an operation and a version.
+    ///
+    /// # Arguments
+    ///
+    /// * `op` - The operation to use for the requirement.
+    /// * `version` - The version to use for the requirement. If `None`, the version is empty,
+    ///              which happens when the operation is `*`.
+    pub fn new(op: Op, version: Option<Versioning>) -> Self {
+        Self { op, version }
+    }
+
+    /// Return the operation of the requirement.
+    pub fn op(&self) -> Op {
+        self.op
+    }
+
+    /// Return the version of the requirement.
+    pub fn version(&self) -> Option<&Versioning> {
+        self.version.as_ref()
+    }
+
+    /// Return whether the requirement tilde-matches another requirement
+    fn matches_tilde(&self, other: &Versioning) -> bool {
+        if let Some(version) = self.version.as_ref() {
+            version_triples_match_tilde(version, other)
+        } else {
+            false
+        }
+    }
+
+    /// Return whether the requirement caret-matches another requirement
+    fn matches_caret(&self, other: &Versioning) -> bool {
+        if let Some(version) = self.version.as_ref() {
+            version_triples_match_caret(version, other)
+        } else {
+            false
+        }
+    }
+
+    /// Check if a version matches a version constraint.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use versions::{VersioningReq, Versioning};
+    /// use std::str::FromStr;
+    ///
+    /// let constraint_gt = VersioningReq::from_str(">=1.0.0").expect("Invalid req");
+    /// assert!(constraint_gt.matches(&Versioning::new("1.0.0").expect("Invalid version")));
+    /// assert!(constraint_gt.matches(&Versioning::new("1.1.0").expect("Invalid version")));
+    /// assert!(!constraint_gt.matches(&Versioning::new("0.9.0").expect("Invalid version")));
+    ///
+    /// let constraint_wild = VersioningReq::from_str("*").expect("Invalid req");
+    /// assert!(constraint_wild.matches(&Versioning::new("1.0.0").expect("Invalid version")));
+    /// assert!(constraint_wild.matches(&Versioning::new("1.1.0").expect("Invalid version")));
+    /// assert!(constraint_wild.matches(&Versioning::new("0.9.0").expect("Invalid version")));
+    ///
+    /// let constraint_eq = VersioningReq::from_str("==1.0.0").expect("Invalid req");
+    /// assert!(constraint_eq.matches(&Versioning::new("1.0.0").expect("Invalid version")));
+    /// assert!(!constraint_eq.matches(&Versioning::new("1.1.0").expect("Invalid version")));
+    /// assert!(!constraint_eq.matches(&Versioning::new("0.9.0").expect("Invalid version")));
+    /// ```
+    pub fn matches(&self, v: &Versioning) -> bool {
+        if let Some(sv) = &self.version {
+            match self.op {
+                Op::Exact => v == sv,
+                Op::Greater => v > sv,
+                Op::GreaterEq => v >= sv,
+                Op::Less => v < sv,
+                Op::LessEq => v <= sv,
+                Op::Tilde => self.matches_tilde(v),
+                Op::Caret => self.matches_caret(v),
+                Op::Wildcard => true,
+                _ => false,
+            }
+        } else {
+            matches!(self.op, Op::Wildcard)
+        }
+    }
+}
+
+impl FromStr for VersioningReq {
+    type Err = Error;
+
+    // NOTE: The parsing from `semver` is not `pub`, so we lift the pieces we need.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (op, s) = op(s)?;
+
+        let s = if s.is_empty() {
+            None
+        } else {
+            Versioning::new(s)
+        };
+
+        Ok(VersioningReq::new(op, s))
+    }
+}
+
+impl Default for VersioningReq {
+    fn default() -> Self {
+        Self::new(Op::Wildcard, None)
+    }
+}
+
+impl std::fmt::Display for VersioningReq {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}",
+            // NOTE: Display is not implemented for `Op`
+            match self.op {
+                Op::Exact => "=",
+                Op::Greater => ">",
+                Op::GreaterEq => ">=",
+                Op::Less => "<",
+                Op::LessEq => "<=",
+                Op::Tilde => "~",
+                Op::Caret => "^",
+                Op::Wildcard => "",
+                _ => Err(std::fmt::Error)?,
+            },
+            self.version
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or_default()
+        )
+    }
+}
+
+/// Parse an operation from the beginning of a string, returning the operation
+/// and the remaining string.
+fn op(input: &str) -> Result<(Op, &str), Error> {
+    let comparator: String = input
+        .chars()
+        .take_while(|c| matches!(c, '=' | '>' | '<' | '~' | '^' | '*'))
+        .collect();
+    let rest = &input[comparator.len()..];
+    let comp = match comparator.as_ref() {
+        "==" => Op::Exact,
+        ">" => Op::Greater,
+        ">=" => Op::GreaterEq,
+        "<" => Op::Less,
+        "<=" => Op::LessEq,
+        "~" => Op::Tilde,
+        "^" => Op::Caret,
+        "*" => Op::Wildcard,
+        "" => Op::Exact,
+        _ => return Err(Error::IllegalOp(comparator)),
+    };
+
+    Ok((comp, rest))
+}
+
+/// Checks whether two versioning triples are "tilde-compatible", that is v2's patch version
+/// may be greater than v1's, but its major and minor versions may not be.
+/// For tilde matches, the v2 patch can be greater than the v1 patch
+fn version_triples_match_tilde(v1: &Versioning, v2: &Versioning) -> bool {
+    match v1 {
+        Versioning::Ideal(v1) => {
+            if let Versioning::Ideal(v2) = v2 {
+                v1.major == v2.major && v1.minor == v2.minor && v2.patch >= v1.patch
+            } else {
+                false
+            }
+        }
+        Versioning::General(v1) => {
+            if let Versioning::General(v2) = v2 {
+                if v1.chunks.0.len() != v2.chunks.0.len() {
+                    false
+                } else {
+                    // Check all but the last
+                    for (v1_chunk, v2_chunk) in v1
+                        .chunks
+                        .0
+                        .iter()
+                        .rev()
+                        .skip(1)
+                        .rev()
+                        .zip(v2.chunks.0.iter().rev().skip(1).rev())
+                    {
+                        if v1_chunk != v2_chunk {
+                            return false;
+                        }
+                    }
+                    match (v1.chunks.0.last(), v2.chunks.0.last()) {
+                        // TODO: Do our best with strings. Right now, the alpha patch version can be "less" than the
+                        // first one and this will still be true
+                        (Some(Chunk::Alphanum(_a1)), Some(Chunk::Alphanum(_a2))) => true,
+                        (Some(Chunk::Numeric(n1)), Some(Chunk::Numeric(n2))) => n2 >= n1,
+                        _ => false,
+                    }
+                }
+            } else {
+                false
+            }
+        }
+        // Complex can't be tilde-equal because they're not semantic
+        Versioning::Complex(_svc) => false,
+    }
+}
+
+/// Checks whether two versioning triples are "caret-compatible", that is v2's parts right of the
+/// first non-zero part may be greater than v1's.
+fn version_triples_match_caret(v1: &Versioning, v2: &Versioning) -> bool {
+    match (v1, v2) {
+        (Versioning::Ideal(v1), Versioning::Ideal(v2)) => {
+            // Two ideal versions are caret-compatible if the first nonzero part of v1 and
+            // v2 are equal and v2's parts right of the first nonzero part are greater than
+            // or equal to v1's.
+            if v1.major == 0 && v2.major == 0 {
+                // If both major versions are zero, then the first nonzero part is the minor
+                // version.
+                if v1.minor == 0 && v2.minor == 0 {
+                    // If both minor versions are zero, then the first nonzero part is the
+                    // patch version.
+                    v2.patch == v1.patch
+                } else {
+                    v2.minor == v1.minor && v2.patch >= v1.patch
+                }
+            } else {
+                println!("v1: {:?}, v2: {:?}", v1, v2);
+                v2.major == v1.major
+                    && (v2.minor > v1.minor || (v2.minor >= v1.minor && v2.patch >= v1.patch))
+            }
+        }
+        (Versioning::General(v1), Versioning::General(v2)) => {
+            let mut got_first_nonzero = false;
+            for (v1_chunk, v2_chunk) in v1.chunks.0.iter().zip(v2.chunks.0.iter()) {
+                if !got_first_nonzero {
+                    if !v1_chunk.single_digit().is_some_and(|n| n == 0) {
+                        got_first_nonzero = true;
+                        if v1_chunk != v2_chunk {
+                            return false;
+                        }
+                    }
+                } else if v2_chunk.cmp_lenient(v1_chunk).is_lt() {
+                    return false;
+                }
+            }
+
+            true
+        }
+        // Complex can't be caret-equal because they're not semantic
+        (Versioning::Complex(_svc), Versioning::Complex(_svc2)) => false,
+        _ => false,
+    }
+}
+
+#[cfg(feature = "serde")]
+fn versioning_req_from_string<'de, D>(deserializer: D) -> Result<VersionConstraint, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+
+    s.parse().map_err(D::Error::custom)
+}
+
+/// Return a string rep
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1655,5 +1942,136 @@ mod tests {
     #[test]
     fn parsing_sanity() {
         assert_eq!(Ok(34), "0034".parse::<u32>())
+    }
+
+    #[test]
+    fn test_eq() {
+        assert!(VersioningReq::from_str("==1.0.0")
+            .expect("Failed")
+            .matches(&Versioning::new("1.0.0").expect("Failed")));
+        assert!(VersioningReq::from_str("==1.1.0")
+            .expect("Failed")
+            .matches(&Versioning::new("1.1.0").expect("Failed")));
+        assert!(VersioningReq::from_str("==0.9.0")
+            .expect("Failed")
+            .matches(&Versioning::new("0.9.0").expect("Failed")));
+        assert!(VersioningReq::from_str("==6.0.pre134")
+            .expect("Failed")
+            .matches(&Versioning::new("6.0.pre134").expect("Failed")));
+        assert!(VersioningReq::from_str("==6.0.166")
+            .expect("Failed")
+            .matches(&Versioning::new("6.0.166").expect("Failed")));
+
+        // The == can be left off as a shorthand
+        assert!(VersioningReq::from_str("1.0.0")
+            .expect("Failed")
+            .matches(&Versioning::new("1.0.0").expect("Failed")));
+        assert!(VersioningReq::from_str("1.1.0")
+            .expect("Failed")
+            .matches(&Versioning::new("1.1.0").expect("Failed")));
+        assert!(VersioningReq::from_str("0.9.0")
+            .expect("Failed")
+            .matches(&Versioning::new("0.9.0").expect("Failed")));
+        assert!(VersioningReq::from_str("6.0.pre134")
+            .expect("Failed")
+            .matches(&Versioning::new("6.0.pre134").expect("Failed")));
+        assert!(VersioningReq::from_str("6.0.166")
+            .expect("Failed")
+            .matches(&Versioning::new("6.0.166").expect("Failed")));
+    }
+
+    #[test]
+    fn test_wild() {
+        let constraint_wild = VersioningReq::from_str("*").expect("Failed");
+        assert!(constraint_wild.matches(&Versioning::new("1.0.0").expect("Failed")));
+        assert!(constraint_wild.matches(&Versioning::new("1.1.0").expect("Failed")));
+        assert!(constraint_wild.matches(&Versioning::new("0.9.0").expect("Failed")));
+        assert!(constraint_wild.matches(&Versioning::new("6.0.pre134").expect("Failed")));
+        assert!(constraint_wild.matches(&Versioning::new("6.0.166").expect("Failed")));
+    }
+
+    #[test]
+    fn test_gt() {
+        let constraint_gt = VersioningReq::from_str(">1.1.1").expect("Failed");
+
+        assert!(!constraint_gt.matches(&Versioning::new("1.1.1").expect("Failed")));
+        assert!(constraint_gt.matches(&Versioning::new("2.2.2").expect("Failed")));
+        assert!(constraint_gt.matches(&Versioning::new("2.0.0").expect("Failed")));
+        assert!(constraint_gt.matches(&Versioning::new("1.2.0").expect("Failed")));
+        assert!(constraint_gt.matches(&Versioning::new("1.1.2").expect("Failed")));
+        assert!(!constraint_gt.matches(&Versioning::new("0.9.9").expect("Failed")));
+        assert!(!constraint_gt.matches(&Versioning::new("0.1.1").expect("Failed")));
+        assert!(!constraint_gt.matches(&Versioning::new("1.0.0").expect("Failed")));
+        assert!(!constraint_gt.matches(&Versioning::new("1.1.0").expect("Failed")));
+    }
+
+    #[test]
+    fn test_lt() {
+        let constraint_lt = VersioningReq::from_str("<1.1.1").expect("Failed");
+        assert!(!constraint_lt.matches(&Versioning::new("1.1.1").expect("Failed")));
+        assert!(!constraint_lt.matches(&Versioning::new("2.2.2").expect("Failed")));
+        assert!(!constraint_lt.matches(&Versioning::new("2.0.0").expect("Failed")));
+        assert!(!constraint_lt.matches(&Versioning::new("1.2.0").expect("Failed")));
+        assert!(!constraint_lt.matches(&Versioning::new("1.1.2").expect("Failed")));
+        assert!(constraint_lt.matches(&Versioning::new("0.9.9").expect("Failed")));
+        assert!(constraint_lt.matches(&Versioning::new("0.1.1").expect("Failed")));
+        assert!(constraint_lt.matches(&Versioning::new("1.0.0").expect("Failed")));
+        assert!(constraint_lt.matches(&Versioning::new("1.1.0").expect("Failed")));
+    }
+
+    #[test]
+    fn test_gte() {
+        let constraint_gte = VersioningReq::from_str(">=1.1.1").expect("Failed");
+        assert!(constraint_gte.matches(&Versioning::new("1.1.1").expect("Failed")));
+        assert!(constraint_gte.matches(&Versioning::new("2.2.2").expect("Failed")));
+        assert!(constraint_gte.matches(&Versioning::new("2.0.0").expect("Failed")));
+        assert!(constraint_gte.matches(&Versioning::new("1.2.0").expect("Failed")));
+        assert!(constraint_gte.matches(&Versioning::new("1.1.2").expect("Failed")));
+        assert!(!constraint_gte.matches(&Versioning::new("0.9.9").expect("Failed")));
+        assert!(!constraint_gte.matches(&Versioning::new("0.1.1").expect("Failed")));
+        assert!(!constraint_gte.matches(&Versioning::new("1.0.0").expect("Failed")));
+        assert!(!constraint_gte.matches(&Versioning::new("1.1.0").expect("Failed")));
+    }
+
+    #[test]
+    fn test_lte() {
+        let constraint_lte = VersioningReq::from_str("<=1.1.1").expect("Failed");
+        assert!(constraint_lte.matches(&Versioning::new("1.1.1").expect("Failed")));
+        assert!(!constraint_lte.matches(&Versioning::new("2.2.2").expect("Failed")));
+        assert!(!constraint_lte.matches(&Versioning::new("2.0.0").expect("Failed")));
+        assert!(!constraint_lte.matches(&Versioning::new("1.2.0").expect("Failed")));
+        assert!(!constraint_lte.matches(&Versioning::new("1.1.2").expect("Failed")));
+        assert!(constraint_lte.matches(&Versioning::new("0.9.9").expect("Failed")));
+        assert!(constraint_lte.matches(&Versioning::new("0.1.1").expect("Failed")));
+        assert!(constraint_lte.matches(&Versioning::new("1.0.0").expect("Failed")));
+        assert!(constraint_lte.matches(&Versioning::new("1.1.0").expect("Failed")));
+    }
+
+    #[test]
+    fn test_tilde() {
+        let constraint_tilde = VersioningReq::from_str("~1.1.1").expect("Failed");
+        assert!(constraint_tilde.matches(&Versioning::new("1.1.1").expect("Failed")));
+        assert!(constraint_tilde.matches(&Versioning::new("1.1.2").expect("Failed")));
+        assert!(constraint_tilde.matches(&Versioning::new("1.1.3").expect("Failed")));
+        assert!(!constraint_tilde.matches(&Versioning::new("1.2.0").expect("Failed")));
+        assert!(!constraint_tilde.matches(&Versioning::new("2.0.0").expect("Failed")));
+        assert!(!constraint_tilde.matches(&Versioning::new("2.2.2").expect("Failed")));
+        assert!(!constraint_tilde.matches(&Versioning::new("0.9.9").expect("Failed")));
+        assert!(!constraint_tilde.matches(&Versioning::new("0.1.1").expect("Failed")));
+        assert!(!constraint_tilde.matches(&Versioning::new("1.0.0").expect("Failed")));
+    }
+
+    #[test]
+    fn test_caret() {
+        let constraint_caret = VersioningReq::from_str("^1.1.1").expect("Failed");
+        assert!(constraint_caret.matches(&Versioning::new("1.1.1").expect("Failed")));
+        assert!(constraint_caret.matches(&Versioning::new("1.1.2").expect("Failed")));
+        assert!(constraint_caret.matches(&Versioning::new("1.1.3").expect("Failed")));
+        assert!(constraint_caret.matches(&Versioning::new("1.2.0").expect("Failed")));
+        assert!(!constraint_caret.matches(&Versioning::new("2.0.0").expect("Failed")));
+        assert!(!constraint_caret.matches(&Versioning::new("2.2.2").expect("Failed")));
+        assert!(!constraint_caret.matches(&Versioning::new("0.9.9").expect("Failed")));
+        assert!(!constraint_caret.matches(&Versioning::new("0.1.1").expect("Failed")));
+        assert!(!constraint_caret.matches(&Versioning::new("1.0.0").expect("Failed")));
     }
 }

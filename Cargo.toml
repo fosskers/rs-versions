@@ -14,10 +14,13 @@ categories = ["parser-implementations"]
 [dependencies]
 itertools = "0.12"
 nom = "7.1"
-semver = "1.0"
+semver = { version = "1.0", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]
 version-sync = "0.9"
 semver = "1.0"
 semver-parser = "0.10"
+
+[features]
+semver = ["dep:semver"]

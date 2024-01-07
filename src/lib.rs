@@ -82,6 +82,8 @@ pub enum Error {
     IllegalOp(String),
 }
 
+impl std::error::Error for Error {}
+
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1310,6 +1312,37 @@ impl Versioning {
             Versioning::Complex(m) => m.nth(n),
         }
     }
+
+    #[cfg(feature = "serde")]
+    /// Function suitable for use as a serde deserializer for `Versioning` where
+    /// `Versioning` is the type of a field in a struct.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use versions::Versioning;
+    /// use serde::Deserialize;
+    /// use serde_json::from_str;
+    ///
+    /// #[derive(Deserialize)]
+    /// struct Foo {
+    ///    #[serde(deserialize_with = "Versioning::deserialize")]
+    ///    version: Versioning,
+    ///    // ...
+    /// }
+    ///
+    /// let foo: Foo = from_str(r#"{"version": "1.0.0"}"#).unwrap();
+    /// ```
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Versioning, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+
+        Versioning::new(&s)
+            .ok_or_else(|| Error::IllegalVersioning(s))
+            .map_err(D::Error::custom)
+    }
 }
 
 impl PartialOrd for Versioning {
@@ -1379,18 +1412,6 @@ impl Default for Versioning {
     fn default() -> Self {
         Self::Ideal(SemVer::default())
     }
-}
-
-#[cfg(feature = "serde")]
-pub fn versioning_from_string<'de, D>(deserializer: D) -> Result<Versioning, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-
-    Versioning::new(&s)
-        .ok_or_else(|| Err(Error::IllegalVersioning(s)))
-        .map_err(D::Error::custom)
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -1646,6 +1667,35 @@ impl VersioningReq {
             .flatten();
         Ok(VersioningReq::new(op, version))
     }
+
+    #[cfg(feature = "serde")]
+    /// Function suitable for use as a serde deserializer for `VersioningReq` where
+    /// `VersioningReq` is the type of a field in a struct.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use versions::VersioningReq;
+    /// use serde::Deserialize;
+    /// use serde_json::from_str;
+    ///
+    /// #[derive(Deserialize)]
+    /// struct Foo {
+    ///    #[serde(deserialize_with = "VersioningReq::deserialize")]
+    ///    requirement: VersioningReq,
+    ///    // ...
+    /// }
+    ///
+    /// let foo: Foo = from_str(r#"{"requirement": ">=1.0.0"}"#).unwrap();
+    /// ```
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<VersioningReq, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+
+        s.parse().map_err(D::Error::custom)
+    }
 }
 
 impl FromStr for VersioningReq {
@@ -1671,16 +1721,6 @@ impl std::fmt::Display for VersioningReq {
             .unwrap_or_default();
         write!(f, "{}{}", self.op, version,)
     }
-}
-
-#[cfg(feature = "serde")]
-fn versioning_req_from_string<'de, D>(deserializer: D) -> Result<VersionConstraint, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-
-    s.parse().map_err(D::Error::custom)
 }
 
 /// Return a string rep
@@ -2076,5 +2116,36 @@ mod tests {
         assert!(!constraint_caret.matches(&Versioning::new("0.9.9").unwrap()));
         assert!(!constraint_caret.matches(&Versioning::new("0.1.1").unwrap()));
         assert!(!constraint_caret.matches(&Versioning::new("1.0.0").unwrap()));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_deserialize() {
+        use serde::Deserialize;
+
+        #[derive(Deserialize)]
+        struct DeserializableVersioning {
+            #[serde(deserialize_with = "Versioning::deserialize")]
+            version: Versioning,
+        }
+
+        let deserializable: DeserializableVersioning =
+            serde_json::from_str(r#"{"version": "1.2.3"}"#).unwrap();
+
+        assert_eq!(deserializable.version, Versioning::new("1.2.3").unwrap());
+
+        #[derive(Deserialize)]
+        struct DeserializableVersioningReq {
+            #[serde(deserialize_with = "VersioningReq::deserialize")]
+            version: VersioningReq,
+        }
+
+        let deserializable: DeserializableVersioningReq =
+            serde_json::from_str(r#"{"version": ">=1.2.3"}"#).unwrap();
+
+        assert_eq!(
+            deserializable.version,
+            VersioningReq::new(Op::GreaterEq, Some(Versioning::new("1.2.3").unwrap()))
+        );
     }
 }

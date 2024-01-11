@@ -1,5 +1,13 @@
 # `versions` Changelog
 
+## Unreleased
+
+#### Added
+
+- The `Requirement` type for testing version constraints.
+- `Versioning::parse` for usage with `nom`.
+- `Versioning::deserialize_pretty` for deserializing directly from raw version strings.
+
 ## 6.0.0 (2023-12-06)
 
 While technically a breaking change, most users should not notice.

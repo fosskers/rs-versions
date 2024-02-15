@@ -1968,6 +1968,12 @@ mod tests {
         }
     }
 
+    #[test]
+    fn mess_7zip() {
+        cmp_messes("22.01-ZS-v1.5.5-R2", "22.01-ZS-v1.5.6-R2");
+        cmp_messes("22.01-ZS-v1.5.5-R2", "24.02-ZS-v1.6.0");
+    }
+
     fn cmp_messes(a: &str, b: &str) {
         let x = Mess::new(a).unwrap();
         let y = Mess::new(b).unwrap();

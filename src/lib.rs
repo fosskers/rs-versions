@@ -81,7 +81,7 @@ use nom::multi::separated_list1;
 use nom::IResult;
 use parsers::{alphanums, hyphenated_alphanums, unsigned};
 #[cfg(feature = "serde")]
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::hash::{Hash, Hasher};
@@ -1726,6 +1726,31 @@ impl Requirement {
 
         s.parse().map_err(D::Error::custom)
     }
+
+    #[cfg(feature = "serde")]
+    /// Function suitable for use as a custom serde serializer for
+    /// the `Requirment` struct.
+    ///
+    /// ```rust
+    /// use versions::Requirement;
+    /// use serde::Serialize;
+    /// use serde_json::to_string;
+    ///
+    /// #[derive(Serialize)]
+    /// struct Foo {
+    ///    #[serde(serialize_with = "Requirement::serialize")]
+    ///    requirement: Requirement,
+    ///    // ...
+    /// }
+    ///
+    /// ```
+    pub fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s: String = format!("{}", self);
+        serializer.serialize_str(&s)
+    }
 }
 
 impl FromStr for Requirement {
@@ -2187,5 +2212,25 @@ mod tests {
                 version: Some(Versioning::new("1.2.3").unwrap())
             }
         );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serialize() {
+        use serde::Serialize;
+
+        #[derive(Serialize)]
+        struct SerializableRequirement {
+            #[serde(serialize_with = "Requirement::serialize")]
+            req: Requirement,
+        }
+
+        let test_object = SerializableRequirement {
+            req: Requirement::from_str(">=1.2.3").unwrap(),
+        };
+
+        let string = serde_json::to_string(&test_object).unwrap();
+
+        assert_eq!(string, "{\"req\":\">=1.2.3\"}");
     }
 }

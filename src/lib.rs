@@ -1729,7 +1729,7 @@ impl Requirement {
 
     #[cfg(feature = "serde")]
     /// Function suitable for use as a custom serde serializer for
-    /// the `Requirment` struct.
+    /// the `Requirment` type.
     ///
     /// ```rust
     /// use versions::Requirement;
@@ -1748,7 +1748,7 @@ impl Requirement {
     where
         S: Serializer,
     {
-        let s: String = format!("{}", self);
+        let s: String = self.to_string();
         serializer.serialize_str(&s)
     }
 }

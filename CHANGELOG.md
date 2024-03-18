@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## Unreleased
+
+#### Added
+
+- `Requirement::serialize` for pretty-encoding of version "requirements strings".
+
 ## 6.1.0 (2024-01-12)
 
 #### Added

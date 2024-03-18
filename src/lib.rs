@@ -69,7 +69,7 @@
 
 #![allow(clippy::many_single_char_names)]
 #![warn(missing_docs)]
-#![doc(html_root_url = "https://docs.rs/versions/6.1.0")]
+#![doc(html_root_url = "https://docs.rs/versions/6.2.0")]
 
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;

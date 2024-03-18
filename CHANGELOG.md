@@ -1,6 +1,6 @@
 # `versions` Changelog
 
-## Unreleased
+## 6.2.0 (2024-03-18)
 
 #### Added
 

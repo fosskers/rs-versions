@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## Unreleased
+
+#### Changed
+
+- Relaxed argument to `new` functions to accept `S: AsRef<str>`.
+
 ## 6.2.0 (2024-03-18)
 
 #### Added

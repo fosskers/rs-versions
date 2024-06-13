@@ -164,8 +164,11 @@ pub struct SemVer {
 
 impl SemVer {
     /// Parse a `SemVer` from some input.
-    pub fn new(s: &str) -> Option<SemVer> {
-        match SemVer::parse(s) {
+    pub fn new<S>(s: S) -> Option<SemVer>
+    where
+        S: AsRef<str>,
+    {
+        match SemVer::parse(s.as_ref()) {
             Ok(("", sv)) => Some(sv),
             _ => None,
         }
@@ -490,8 +493,11 @@ pub struct Version {
 
 impl Version {
     /// Parse a `Version` from some input.
-    pub fn new(s: &str) -> Option<Version> {
-        match Version::parse(s) {
+    pub fn new<S>(s: S) -> Option<Version>
+    where
+        S: AsRef<str>,
+    {
+        match Version::parse(s.as_ref()) {
             Ok(("", v)) => Some(v),
             _ => None,
         }
@@ -781,8 +787,11 @@ pub struct Mess {
 
 impl Mess {
     /// Parse a `Mess` from some input.
-    pub fn new(s: &str) -> Option<Mess> {
-        match Mess::parse(s) {
+    pub fn new<S>(s: S) -> Option<Mess>
+    where
+        S: AsRef<str>,
+    {
+        match Mess::parse(s.as_ref()) {
             Ok(("", m)) => Some(m),
             _ => None,
         }
@@ -1352,11 +1361,16 @@ pub enum Versioning {
 impl Versioning {
     /// Create a `Versioning` by attempting to parse the input first as
     /// [`SemVer`], then as a [`Version`], and finally as a [`Mess`].
-    pub fn new(s: &str) -> Option<Versioning> {
-        SemVer::new(s)
+    pub fn new<S>(s: S) -> Option<Versioning>
+    where
+        S: AsRef<str>,
+    {
+        let str = s.as_ref();
+
+        SemVer::new(str)
             .map(Versioning::Ideal)
-            .or_else(|| Version::new(s).map(Versioning::General))
-            .or_else(|| Mess::new(s).map(Versioning::Complex))
+            .or_else(|| Version::new(str).map(Versioning::General))
+            .or_else(|| Mess::new(str).map(Versioning::Complex))
     }
 
     /// The raw `nom` parser for [`Versioning`]. Feel free to use this in

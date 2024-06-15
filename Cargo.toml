@@ -1,6 +1,6 @@
 [package]
 name = "versions"
-version = "6.2.0"
+version = "6.3.0"
 authors = ["Colin Woodbury <colin@fosskers.ca>"]
 edition = "2021"
 description = "A library for parsing and comparing software version numbers."

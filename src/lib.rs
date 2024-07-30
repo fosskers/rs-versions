@@ -76,6 +76,7 @@ use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{alphanumeric1, char, digit1};
+use nom::combinator::eof;
 use nom::combinator::{fail, map, map_res, opt, peek, recognize, value};
 use nom::multi::separated_list1;
 use nom::IResult;
@@ -947,7 +948,7 @@ impl MChunk {
         let (i, (u, s)) = map_res(recognize(digit1), |s: &str| {
             s.parse::<u32>().map(|u| (u, s))
         })(i)?;
-        let (i, _) = alt((peek(recognize(char('.'))), peek(recognize(Mess::sep))))(i)?;
+        let (i, _) = alt((peek(recognize(char('.'))), peek(recognize(Mess::sep)), eof))(i)?;
         let chunk = MChunk::Digits(u, s.to_string());
         Ok((i, chunk))
     }
@@ -957,7 +958,7 @@ impl MChunk {
         let (i, (u, s)) = map_res(recognize(digit1), |s: &str| {
             s.parse::<u32>().map(|u| (u, s))
         })(i)?;
-        let (i, _) = alt((peek(recognize(char('.'))), peek(recognize(Mess::sep))))(i)?;
+        let (i, _) = alt((peek(recognize(char('.'))), peek(recognize(Mess::sep)), eof))(i)?;
         let chunk = MChunk::Rev(u, format!("r{}", s));
         Ok((i, chunk))
     }
@@ -1813,6 +1814,68 @@ mod tests {
         assert_eq!(
             Ok(("", Chunk::Alphanum("00a".to_string()))),
             Chunk::parse("00a")
+        );
+    }
+
+    #[test]
+    fn mess_chunks() {
+        assert_eq!(
+            Ok(("", MChunk::Digits(1, "1".to_owned()))),
+            MChunk::parse("1")
+        );
+
+        assert_eq!(
+            Ok(("", MChunk::Digits(1, "01".to_owned()))),
+            MChunk::parse("01")
+        );
+
+        assert_eq!(
+            Ok(("", MChunk::Digits(987, "987".to_owned()))),
+            MChunk::parse("987")
+        );
+
+        assert_eq!(
+            Ok(("", MChunk::Rev(1, "r1".to_owned()))),
+            MChunk::parse("r1")
+        );
+
+        assert_eq!(
+            Ok(("", MChunk::Rev(1, "r01".to_owned()))),
+            MChunk::parse("r01")
+        );
+
+        assert_eq!(
+            Ok(("", MChunk::Rev(987, "r987".to_owned()))),
+            MChunk::parse("r987")
+        );
+
+        assert_eq!(
+            Ok(("", MChunk::Plain("abcd".to_owned()))),
+            MChunk::parse("abcd")
+        );
+
+        assert_eq!(
+            Ok(("", MChunk::Plain("1r3".to_owned()))),
+            MChunk::parse("1r3")
+        );
+
+        assert_eq!(
+            Ok(("", MChunk::Plain("alpha0".to_owned()))),
+            MChunk::parse("alpha0")
+        );
+    }
+
+    #[test]
+    fn parse_mess() {
+        assert_eq!(
+            Ok((
+                "",
+                Mess {
+                    chunks: vec![MChunk::Digits(1, "1".to_owned()),],
+                    next: None
+                }
+            )),
+            Mess::parse("1")
         );
     }
 

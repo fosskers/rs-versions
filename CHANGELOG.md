@@ -4,6 +4,7 @@
 
 #### Fixed
 
+- Parsing of `Mess` on a single digit will correctly yield `MChunk::Digits`.
 - Improved comparison of `Version`s whose main chunks lead with a letter, e.g. `r23`.
 
 ## 6.3.0 (2024-06-15)

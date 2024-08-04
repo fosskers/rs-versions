@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## 6.3.1 (2024-08-05)
+
+#### Fixed
+
+- Improved comparison of `Version`s whose main chunks lead with a letter, e.g. `r23`.
+
 ## 6.3.0 (2024-06-15)
 
 #### Changed

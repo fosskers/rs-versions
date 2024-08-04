@@ -1231,6 +1231,27 @@ impl Chunk {
         }
     }
 
+    /// Like [`Chunk::single_digit`], but will grab a trailing `u32`.
+    ///
+    /// ```
+    /// use versions::Chunk;
+    ///
+    /// let v = Chunk::Alphanum("r23".to_string());
+    /// assert_eq!(Some(23), v.single_digit_lenient_post());
+    /// ```
+    pub fn single_digit_lenient_post(&self) -> Option<u32> {
+        match self {
+            Chunk::Numeric(n) => Some(*n),
+            Chunk::Alphanum(s) => {
+                // FIXME 2024-08-05 `strip_prefix` may be too aggressive. Should
+                // we only strip one char instead?
+                s.strip_prefix(|c: char| c.is_ascii_alphabetic())
+                    .and_then(|stripped| unsigned(stripped).ok())
+                    .map(|(_, n)| n)
+            }
+        }
+    }
+
     fn parse(i: &str) -> IResult<&str, Chunk> {
         alt((Chunk::alphanum, Chunk::numeric))(i)
     }
@@ -1270,6 +1291,9 @@ impl Chunk {
         // FIXME Fri Jan  7 12:34:24 2022
         //
         // Is there going to be an issue here, having not accounted for an `r`?
+        //
+        // 2023-08-05
+        // This actually just came up in Aura, but for Versions.
         match self {
             Chunk::Numeric(n) => MChunk::Digits(*n, n.to_string()),
             Chunk::Alphanum(s) => MChunk::Plain(s.clone()),
@@ -1298,8 +1322,21 @@ impl Chunk {
         match (self, other) {
             (Chunk::Numeric(a), Chunk::Numeric(b)) => a.cmp(b),
             (a @ Chunk::Alphanum(x), b @ Chunk::Alphanum(y)) => {
-                match (a.single_digit_lenient(), b.single_digit_lenient()) {
-                    (Some(i), Some(j)) => i.cmp(&j),
+                match (x.chars().next(), y.chars().next()) {
+                    (Some(xc), Some(yc)) if xc.is_ascii_alphabetic() && xc == yc => {
+                        match (a.single_digit_lenient_post(), b.single_digit_lenient_post()) {
+                            // r8 < r23
+                            (Some(m), Some(n)) => m.cmp(&n),
+                            _ => x.cmp(y),
+                        }
+                    }
+                    (Some(xc), Some(yc)) if xc.is_ascii_digit() && yc.is_ascii_digit() => {
+                        match (a.single_digit_lenient(), b.single_digit_lenient()) {
+                            // 0rc1 < 1rc1
+                            (Some(i), Some(j)) => i.cmp(&j),
+                            _ => x.cmp(y),
+                        }
+                    }
                     _ => x.cmp(y),
                 }
             }
@@ -2014,11 +2051,23 @@ mod tests {
         cmp_versions("1.1", "1:1.1");
     }
 
+    // https://github.com/fosskers/aura/issues/876
+    #[test]
+    fn aura_876() {
+        let x = Versioning::new("2.14.r8.g28399bf-1").unwrap();
+        let y = Versioning::new("2.14.r23.ga07d3df-1").unwrap();
+        assert!(x.is_general());
+        assert!(y.is_general());
+        cmp_versions("2.14.r8.g28399bf-1", "2.14.r23.ga07d3df-1");
+        cmp_versions("2.14.r23.ga07d3df-1", "2.14.8");
+    }
+
     fn cmp_versions(a: &str, b: &str) {
         let x = Version::new(a).unwrap();
         let y = Version::new(b).unwrap();
 
         assert!(x < y, "{} < {}", x, y);
+        assert!(y > x, "{} > {}", y, x);
     }
 
     #[test]
@@ -2081,6 +2130,7 @@ mod tests {
         let y = Mess::new(b).unwrap();
 
         assert!(x < y, "{} < {}", x, y);
+        assert!(y > x, "{} > {}", y, x);
     }
 
     #[test]

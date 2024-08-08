@@ -16,9 +16,9 @@ use serde::{Deserialize, Serialize};
 ///
 /// This is a *descriptive* scheme, meaning that it encapsulates the most
 /// common, unconscious patterns that developers use when assigning version
-/// numbers to their software. If not [`SemVer`], most version numbers found in
-/// the wild will parse as a `Version`. These generally conform to the `x.x.x-x`
-/// pattern, and may optionally have an *epoch*.
+/// numbers to their software. If not [`crate::SemVer`], most version numbers
+/// found in the wild will parse as a `Version`. These generally conform to the
+/// `x.x.x-x` pattern, and may optionally have an *epoch*.
 ///
 /// # Epochs
 ///
@@ -46,13 +46,13 @@ pub struct Version {
     /// An optional prefix that marks that some paradigm shift in versioning has
     /// occurred between releases of some software.
     pub epoch: Option<u32>,
-    /// The main sections of the `Version`. Unlike [`SemVer`], these sections
-    /// are allowed to contain letters.
+    /// The main sections of the `Version`. Unlike [`crate::SemVer`], these
+    /// sections are allowed to contain letters.
     pub chunks: Chunks,
-    /// This either indicates a prerelease like [`SemVer`], or a "release"
-    /// revision for software packages. In the latter case, a version like
-    /// `1.2.3-2` implies that the software itself hasn't changed, but that this
-    /// is the second bundling/release (etc.) of that particular package.
+    /// This either indicates a prerelease like [`crate::SemVer`], or a
+    /// "release" revision for software packages. In the latter case, a version
+    /// like `1.2.3-2` implies that the software itself hasn't changed, but that
+    /// this is the second bundling/release (etc.) of that particular package.
     pub release: Option<Release>,
     /// Some extra metadata that doesn't factor into comparison.
     pub meta: Option<String>,
@@ -71,7 +71,7 @@ impl Version {
     }
 
     /// Try to extract a position from the `Version` as a nice integer, as if it
-    /// were a [`SemVer`].
+    /// were a [`crate::SemVer`].
     ///
     /// ```
     /// use versions::Version;

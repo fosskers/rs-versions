@@ -19,9 +19,9 @@ use serde::{Deserialize, Serialize};
 
 /// A complex version number with no specific structure.
 ///
-/// Like [`Version`] this is a *descriptive* scheme, but it is based on examples
-/// of stupidly crafted, near-lawless version numbers used in the wild. Versions
-/// like this are a considerable burden to package management software.
+/// Like [`crate::Version`] this is a *descriptive* scheme, but it is based on
+/// examples of stupidly crafted, near-lawless version numbers used in the wild.
+/// Versions like this are a considerable burden to package management software.
 ///
 /// With `Mess`, groups of letters/numbers are separated by a period, but can be
 /// further separated by the symbols `_-+:`.
@@ -29,9 +29,9 @@ use serde::{Deserialize, Serialize};
 /// Unfortunately, [`Chunk`] cannot be used here, as some developers have
 /// numbers like `1.003.04` which make parsers quite sad.
 ///
-/// Some `Mess` values have a shape that is tantalizingly close to a [`SemVer`].
-/// Example: `1.6.0a+2014+m872b87e73dfb-1`. For values like these, we can
-/// extract the SemVer-compatible values out with [`Mess::nth`].
+/// Some `Mess` values have a shape that is tantalizingly close to a
+/// [`crate::SemVer`]. Example: `1.6.0a+2014+m872b87e73dfb-1`. For values like
+/// these, we can extract the SemVer-compatible values out with [`Mess::nth`].
 ///
 /// In general this is not guaranteed to have well-defined ordering behaviour,
 /// but existing tests show sufficient consistency. [`Mess::nth`] is used
@@ -74,7 +74,7 @@ impl Mess {
     }
 
     /// Try to extract a position from the `Mess` as a nice integer, as if it
-    /// were a [`SemVer`].
+    /// were a [`crate::SemVer`].
     ///
     /// ```
     /// use versions::Mess;

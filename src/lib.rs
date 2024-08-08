@@ -102,7 +102,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone)]
 pub enum Error {
     /// Some string failed to parse into a [`SemVer`] via functions like
-    /// [`FromStr::from_str`] or [`TryFrom::try_from`].
+    /// [`std::str::FromStr::from_str`] or [`TryFrom::try_from`].
     IllegalSemver(String),
     /// Some string failed to parse into a [`Version`].
     IllegalVersion(String),

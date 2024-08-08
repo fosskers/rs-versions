@@ -807,12 +807,19 @@ impl Mess {
     /// assert_eq!(Some(1), mess.nth(0));
     /// assert_eq!(None, mess.nth(1));
     /// assert_eq!(Some(0), mess.nth(2));
+    ///
+    /// let mess = Mess::new("0:1.6a.0+2014+m872b87e73dfb-1").unwrap();
+    /// assert_eq!(Some(1), mess.nth(0));
     /// ```
     pub fn nth(&self, x: usize) -> Option<u32> {
-        self.chunks.get(x).and_then(|chunk| match chunk {
-            MChunk::Digits(i, _) => Some(*i),
-            _ => None,
-        })
+        if let Some((Sep::Colon, next)) = self.next.as_ref() {
+            next.nth(x)
+        } else {
+            self.chunks.get(x).and_then(|chunk| match chunk {
+                MChunk::Digits(i, _) => Some(*i),
+                _ => None,
+            })
+        }
     }
 
     /// Like [`Mess::nth`], but tries to parse out a full [`Chunk`] instead.
@@ -2048,6 +2055,17 @@ mod tests {
         cmp_versions("1.0", "1:1.0");
         cmp_versions("1.1", "1:1.0");
         cmp_versions("1.1", "1:1.1");
+    }
+
+    // https://github.com/fosskers/rs-versions/issues/25
+    #[test]
+    fn versions_25() {
+        let bad = Versioning::new("0:8.7p1-38.el9").unwrap();
+        let good = Versioning::new("0:8.7p1-38.el9_4.1").unwrap();
+
+        assert!(bad.is_general());
+        assert!(good.is_complex());
+        assert!(good > bad);
     }
 
     // https://github.com/fosskers/aura/issues/876

@@ -1,5 +1,13 @@
 # `versions` Changelog
 
+## Unreleased
+
+#### Fixed
+
+- An edge-case in Version/Mess comparisons. [#25][i25]
+
+[i25]: https://github.com/fosskers/rs-versions/issues/25
+
 ## 6.3.1 (2024-08-05)
 
 #### Fixed

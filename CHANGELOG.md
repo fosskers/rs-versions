@@ -1,6 +1,6 @@
 # `versions` Changelog
 
-## Unreleased
+## 6.3.2 (2024-08-09)
 
 #### Fixed
 

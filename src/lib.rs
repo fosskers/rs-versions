@@ -689,6 +689,18 @@ mod tests {
         assert!(good > bad);
     }
 
+    // https://github.com/fosskers/rs-versions/issues/29
+    //
+    // If a `Chunk` goes longer than `u32`, we can't parse it as a `SemVer`. I
+    // decided to mark this "wontfix", as accounting for it increases complexity
+    // and might screw up comparison precedence if something that is actually
+    // true a number is treated instead as a string.
+    #[test]
+    fn versions_29() {
+        let bad = Versioning::new("0.0.0-0.1730239248325").unwrap();
+        assert!(bad.is_complex());
+    }
+
     // https://github.com/fosskers/aura/issues/876
     #[test]
     fn aura_876() {

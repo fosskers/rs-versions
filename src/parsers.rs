@@ -4,13 +4,13 @@ use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while1};
 use nom::character::complete::{char, digit1};
 use nom::combinator::{map, map_res};
-use nom::IResult;
+use nom::{IResult, Parser};
 
 /// Parse an unsigned integer.
 ///
 /// Should yield either a zero on its own, or some other multi-digit number.
 pub(crate) fn unsigned(i: &str) -> IResult<&str, u32> {
-    map_res(alt((tag("0"), digit1)), |s: &str| s.parse::<u32>())(i)
+    map_res(alt((tag("0"), digit1)), |s: &str| s.parse::<u32>()).parse(i)
 }
 
 #[test]
@@ -42,5 +42,6 @@ pub fn meta(i: &str) -> IResult<&str, String> {
     map(
         take_while1(|c: char| c.is_ascii_alphanumeric() || c == '-' || c == '.'),
         |s: &str| s.to_owned(),
-    )(i)
+    )
+    .parse(i)
 }

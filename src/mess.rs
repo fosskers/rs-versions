@@ -8,7 +8,7 @@ use nom::character::complete::{alphanumeric1, char, digit1};
 use nom::combinator::eof;
 use nom::combinator::{map_res, opt, peek, recognize, value};
 use nom::multi::separated_list1;
-use nom::IResult;
+use nom::{IResult, Parser};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::hash::Hash;
@@ -111,8 +111,8 @@ impl Mess {
     /// The raw `nom` parser for [`Mess`]. Feel free to use this in combination
     /// with other general `nom` parsers.
     pub fn parse(i: &str) -> IResult<&str, Mess> {
-        let (i, chunks) = separated_list1(char('.'), MChunk::parse)(i)?;
-        let (i, next) = opt(Mess::next)(i)?;
+        let (i, chunks) = separated_list1(char('.'), MChunk::parse).parse(i)?;
+        let (i, next) = opt(Mess::next).parse(i)?;
 
         let m = Mess {
             chunks,
@@ -136,7 +136,8 @@ impl Mess {
             value(Sep::Plus, char('+')),
             value(Sep::Underscore, char('_')),
             value(Sep::Tilde, char('~')),
-        ))(i)
+        ))
+        .parse(i)
     }
 }
 
@@ -223,14 +224,15 @@ impl MChunk {
     }
 
     pub(crate) fn parse(i: &str) -> IResult<&str, MChunk> {
-        alt((MChunk::digits, MChunk::rev, MChunk::plain))(i)
+        alt((MChunk::digits, MChunk::rev, MChunk::plain)).parse(i)
     }
 
     fn digits(i: &str) -> IResult<&str, MChunk> {
         let (i, (u, s)) = map_res(recognize(digit1), |s: &str| {
             s.parse::<u32>().map(|u| (u, s))
-        })(i)?;
-        let (i, _) = alt((peek(recognize(char('.'))), peek(recognize(Mess::sep)), eof))(i)?;
+        })
+        .parse(i)?;
+        let (i, _) = alt((peek(recognize(char('.'))), peek(recognize(Mess::sep)), eof)).parse(i)?;
         let chunk = MChunk::Digits(u, s.to_string());
         Ok((i, chunk))
     }
@@ -239,8 +241,9 @@ impl MChunk {
         let (i, _) = tag("r")(i)?;
         let (i, (u, s)) = map_res(recognize(digit1), |s: &str| {
             s.parse::<u32>().map(|u| (u, s))
-        })(i)?;
-        let (i, _) = alt((peek(recognize(char('.'))), peek(recognize(Mess::sep)), eof))(i)?;
+        })
+        .parse(i)?;
+        let (i, _) = alt((peek(recognize(char('.'))), peek(recognize(Mess::sep)), eof)).parse(i)?;
         let chunk = MChunk::Rev(u, format!("r{}", s));
         Ok((i, chunk))
     }

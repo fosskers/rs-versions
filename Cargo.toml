@@ -12,8 +12,8 @@ keywords = ["version", "compare", "semantic"]
 categories = ["parser-implementations"]
 
 [dependencies]
-itertools = "0.13"
-nom = "7.1"
+itertools = "0.14"
+nom = "8.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]

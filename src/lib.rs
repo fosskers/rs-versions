@@ -89,7 +89,7 @@ use nom::branch::alt;
 use nom::character::complete::char;
 use nom::combinator::{fail, map};
 use nom::multi::separated_list1;
-use nom::IResult;
+use nom::{IResult, Parser};
 use parsers::{alphanums, hyphenated_alphanums, unsigned};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
@@ -137,7 +137,7 @@ pub struct Release(pub Vec<Chunk>);
 impl Release {
     fn parse(i: &str) -> IResult<&str, Release> {
         let (i, _) = char('-')(i)?;
-        map(separated_list1(char('.'), Chunk::parse), Release)(i)
+        map(separated_list1(char('.'), Chunk::parse), Release).parse(i)
     }
 }
 
@@ -200,7 +200,8 @@ impl Chunks {
         map(
             separated_list1(char('.'), Chunk::parse_without_hyphens),
             Chunks,
-        )(i)
+        )
+        .parse(i)
     }
 }
 
@@ -342,11 +343,11 @@ impl Chunk {
     }
 
     fn parse(i: &str) -> IResult<&str, Chunk> {
-        alt((Chunk::alphanum, Chunk::numeric))(i)
+        alt((Chunk::alphanum, Chunk::numeric)).parse(i)
     }
 
     fn parse_without_hyphens(i: &str) -> IResult<&str, Chunk> {
-        alt((Chunk::alphanum_without_hyphens, Chunk::numeric))(i)
+        alt((Chunk::alphanum_without_hyphens, Chunk::numeric)).parse(i)
     }
 
     // A clever interpretation of the grammar of "alphanumeric identifier".
@@ -358,7 +359,7 @@ impl Chunk {
         if ids.contains(|c: char| c.is_ascii_alphabetic() || c == '-') {
             Ok((i2, Chunk::Alphanum(ids.to_string())))
         } else {
-            fail(i)
+            fail().parse(i)
         }
     }
 
@@ -368,12 +369,12 @@ impl Chunk {
         if ids.contains(|c: char| c.is_ascii_alphabetic()) {
             Ok((i2, Chunk::Alphanum(ids.to_string())))
         } else {
-            fail(i)
+            fail().parse(i)
         }
     }
 
     fn numeric(i: &str) -> IResult<&str, Chunk> {
-        map(unsigned, Chunk::Numeric)(i)
+        map(unsigned, Chunk::Numeric).parse(i)
     }
 
     fn mchunk(&self) -> MChunk {

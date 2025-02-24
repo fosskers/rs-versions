@@ -3,7 +3,7 @@
 use crate::{Chunk, Chunks, Error, MChunk, Mess, Release, Sep};
 use nom::character::complete::char;
 use nom::combinator::opt;
-use nom::IResult;
+use nom::{IResult, Parser};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::hash::Hash;
@@ -171,10 +171,10 @@ impl Version {
     /// The raw `nom` parser for [`Version`]. Feel free to use this in
     /// combination with other general `nom` parsers.
     pub fn parse(i: &str) -> IResult<&str, Version> {
-        let (i, epoch) = opt(Version::epoch)(i)?;
+        let (i, epoch) = opt(Version::epoch).parse(i)?;
         let (i, chunks) = Chunks::parse(i)?;
-        let (i, release) = opt(Release::parse)(i)?;
-        let (i, meta) = opt(crate::parsers::meta)(i)?;
+        let (i, release) = opt(Release::parse).parse(i)?;
+        let (i, meta) = opt(crate::parsers::meta).parse(i)?;
 
         let v = Version {
             epoch,

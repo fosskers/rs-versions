@@ -1,10 +1,10 @@
 //! Constraints on version numbers.
 
 use crate::{Error, Versioning};
-use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::map;
 use nom::IResult;
+use nom::{branch::alt, Parser};
 use std::str::FromStr;
 
 #[cfg(feature = "serde")]
@@ -62,7 +62,8 @@ impl Op {
             map(tag("~"), |_| Op::Tilde),
             map(tag("^"), |_| Op::Caret),
             map(tag("*"), |_| Op::Wildcard),
-        ))(i)
+        ))
+        .parse(i)
     }
 }
 

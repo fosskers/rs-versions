@@ -3,9 +3,9 @@
 use std::cmp::Ordering;
 
 use crate::{Error, Mess, SemVer, Version};
-use nom::branch::alt;
 use nom::combinator::map;
 use nom::IResult;
+use nom::{branch::alt, Parser};
 use std::str::FromStr;
 
 #[cfg(feature = "serde")]
@@ -60,7 +60,8 @@ impl Versioning {
             map(SemVer::parse, Versioning::Ideal),
             map(Version::parse, Versioning::General),
             map(Mess::parse, Versioning::Complex),
-        ))(i)
+        ))
+        .parse(i)
     }
 
     /// A short-hand for detecting an inner [`SemVer`].

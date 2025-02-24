@@ -3,7 +3,7 @@
 use crate::{Chunk, Chunks, Error, MChunk, Mess, Release, Sep, Version};
 use nom::character::complete::char;
 use nom::combinator::opt;
-use nom::IResult;
+use nom::{IResult, Parser};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::hash::{Hash, Hasher};
@@ -211,8 +211,8 @@ impl SemVer {
         let (i, minor) = crate::parsers::unsigned(i)?;
         let (i, _) = char('.')(i)?;
         let (i, patch) = crate::parsers::unsigned(i)?;
-        let (i, pre_rel) = opt(Release::parse)(i)?;
-        let (i, meta) = opt(crate::parsers::meta)(i)?;
+        let (i, pre_rel) = opt(Release::parse).parse(i)?;
+        let (i, meta) = opt(crate::parsers::meta).parse(i)?;
 
         let sv = SemVer {
             major,

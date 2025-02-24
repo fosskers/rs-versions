@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## 6.4.0 (2025-02-24)
+
+#### Changed
+
+- Support for Rust 2024 and other dependency bumps.
+
 ## 6.3.2 (2024-08-09)
 
 #### Fixed

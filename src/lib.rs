@@ -846,21 +846,31 @@ mod tests {
 
     #[test]
     fn test_eq() {
-        assert!(Requirement::from_str("=1.0.0")
-            .unwrap()
-            .matches(&Versioning::new("1.0.0").unwrap()));
-        assert!(Requirement::from_str("=1.1.0")
-            .unwrap()
-            .matches(&Versioning::new("1.1.0").unwrap()));
-        assert!(Requirement::from_str("=0.9.0")
-            .unwrap()
-            .matches(&Versioning::new("0.9.0").unwrap()));
-        assert!(Requirement::from_str("=6.0.pre134")
-            .unwrap()
-            .matches(&Versioning::new("6.0.pre134").unwrap()));
-        assert!(Requirement::from_str("=6.0.166")
-            .unwrap()
-            .matches(&Versioning::new("6.0.166").unwrap()));
+        assert!(
+            Requirement::from_str("=1.0.0")
+                .unwrap()
+                .matches(&Versioning::new("1.0.0").unwrap())
+        );
+        assert!(
+            Requirement::from_str("=1.1.0")
+                .unwrap()
+                .matches(&Versioning::new("1.1.0").unwrap())
+        );
+        assert!(
+            Requirement::from_str("=0.9.0")
+                .unwrap()
+                .matches(&Versioning::new("0.9.0").unwrap())
+        );
+        assert!(
+            Requirement::from_str("=6.0.pre134")
+                .unwrap()
+                .matches(&Versioning::new("6.0.pre134").unwrap())
+        );
+        assert!(
+            Requirement::from_str("=6.0.166")
+                .unwrap()
+                .matches(&Versioning::new("6.0.166").unwrap())
+        );
     }
 
     #[test]

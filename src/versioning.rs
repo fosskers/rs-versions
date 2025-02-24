@@ -3,13 +3,13 @@
 use std::cmp::Ordering;
 
 use crate::{Error, Mess, SemVer, Version};
-use nom::combinator::map;
 use nom::IResult;
-use nom::{branch::alt, Parser};
+use nom::combinator::map;
+use nom::{Parser, branch::alt};
 use std::str::FromStr;
 
 #[cfg(feature = "serde")]
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
 /// A top-level Versioning type which acts as a wrapper for the more specific
 /// types.

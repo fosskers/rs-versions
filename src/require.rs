@@ -1,14 +1,14 @@
 //! Constraints on version numbers.
 
 use crate::{Error, Versioning};
+use nom::IResult;
 use nom::bytes::complete::tag;
 use nom::combinator::map;
-use nom::IResult;
-use nom::{branch::alt, Parser};
+use nom::{Parser, branch::alt};
 use std::str::FromStr;
 
 #[cfg(feature = "serde")]
-use serde::{de::Error as _, Deserialize, Deserializer, Serializer};
+use serde::{Deserialize, Deserializer, Serializer, de::Error as _};
 
 /// [`Versioning`] comparison operators used in a [`Requirement`]: `=`, `>`,
 /// `>=`, `<`, `<=`, `~`, `^`, `*`.

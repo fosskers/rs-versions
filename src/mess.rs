@@ -5,7 +5,7 @@ use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{alphanumeric1, char, digit1};
-use nom::combinator::eof;
+use nom::combinator::{eof, fail};
 use nom::combinator::{map_res, opt, peek, recognize, value};
 use nom::multi::separated_list1;
 use nom::{IResult, Parser};
@@ -118,6 +118,10 @@ impl Mess {
             chunks,
             next: next.map(|(s, m)| (s, Box::new(m))),
         };
+
+        if i.len() > 0 {
+            return fail().parse(i);
+        }
 
         Ok((i, m))
     }

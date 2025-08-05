@@ -2,7 +2,7 @@
 
 use crate::{Chunk, Chunks, Error, MChunk, Mess, Release, Sep};
 use nom::character::complete::char;
-use nom::combinator::opt;
+use nom::combinator::{fail, opt};
 use nom::{IResult, Parser};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
@@ -182,6 +182,10 @@ impl Version {
             meta,
             release,
         };
+
+        if i.len() > 0 {
+            return fail().parse(i);
+        }
 
         Ok((i, v))
     }

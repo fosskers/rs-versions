@@ -42,7 +42,8 @@ use serde::{Deserialize, Serialize};
 /// ```
 /// use versions::{Mess, SemVer, Version};
 ///
-/// let mess = "20.0026.1_0-2+0.93";
+/// // let mess = "0.7.0++dfsg2+really.0.6.1-15";
+/// let mess = "6.0.1+~3.0.4+~2.0.0+~1.0.0+~2.0.1-1";
 ///
 /// let s = SemVer::new(mess);
 /// let v = Version::new(mess);
@@ -135,6 +136,8 @@ impl Mess {
 
     fn sep(i: &str) -> IResult<&str, Sep> {
         alt((
+            value(Sep::PlusPlus, tag("++")),
+            value(Sep::PlusTilde, tag("+~")),
             value(Sep::Colon, char(':')),
             value(Sep::Hyphen, char('-')),
             value(Sep::Plus, char('+')),
@@ -313,16 +316,22 @@ pub enum Sep {
     Underscore,
     /// `~`
     Tilde,
+    /// `+~`
+    PlusTilde,
+    /// `++`
+    PlusPlus,
 }
 
 impl std::fmt::Display for Sep {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let c = match self {
-            Sep::Colon => ':',
-            Sep::Hyphen => '-',
-            Sep::Plus => '+',
-            Sep::Underscore => '_',
-            Sep::Tilde => '~',
+            Sep::Colon => ":",
+            Sep::Hyphen => "-",
+            Sep::Plus => "+",
+            Sep::Underscore => "_",
+            Sep::Tilde => "~",
+            Sep::PlusTilde => "+~",
+            Sep::PlusPlus => "++",
         };
         write!(f, "{}", c)
     }

@@ -2,7 +2,7 @@
 
 use crate::{Chunk, Chunks, Error, MChunk, Mess, Release, Sep, Version};
 use nom::character::complete::char;
-use nom::combinator::opt;
+use nom::combinator::{fail, opt};
 use nom::{IResult, Parser};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
@@ -221,6 +221,10 @@ impl SemVer {
             pre_rel,
             meta,
         };
+
+        if i.len() > 0 {
+            return fail().parse(i);
+        }
 
         Ok((i, sv))
     }

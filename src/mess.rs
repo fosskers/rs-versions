@@ -5,7 +5,7 @@ use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{alphanumeric1, char, digit1};
-use nom::combinator::eof;
+use nom::combinator::{eof, fail};
 use nom::combinator::{map_res, opt, peek, recognize, value};
 use nom::multi::separated_list1;
 use nom::{IResult, Parser};
@@ -42,7 +42,8 @@ use serde::{Deserialize, Serialize};
 /// ```
 /// use versions::{Mess, SemVer, Version};
 ///
-/// let mess = "20.0026.1_0-2+0.93";
+/// // let mess = "0.7.0++dfsg2+really.0.6.1-15";
+/// let mess = "6.0.1+~3.0.4+~2.0.0+~1.0.0+~2.0.1-1";
 ///
 /// let s = SemVer::new(mess);
 /// let v = Version::new(mess);
@@ -119,6 +120,10 @@ impl Mess {
             next: next.map(|(s, m)| (s, Box::new(m))),
         };
 
+        if i.len() > 0 {
+            return fail().parse(i);
+        }
+
         Ok((i, m))
     }
 
@@ -131,6 +136,8 @@ impl Mess {
 
     fn sep(i: &str) -> IResult<&str, Sep> {
         alt((
+            value(Sep::PlusPlus, tag("++")),
+            value(Sep::PlusTilde, tag("+~")),
             value(Sep::Colon, char(':')),
             value(Sep::Hyphen, char('-')),
             value(Sep::Plus, char('+')),
@@ -309,16 +316,22 @@ pub enum Sep {
     Underscore,
     /// `~`
     Tilde,
+    /// `+~`
+    PlusTilde,
+    /// `++`
+    PlusPlus,
 }
 
 impl std::fmt::Display for Sep {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let c = match self {
-            Sep::Colon => ':',
-            Sep::Hyphen => '-',
-            Sep::Plus => '+',
-            Sep::Underscore => '_',
-            Sep::Tilde => '~',
+            Sep::Colon => ":",
+            Sep::Hyphen => "-",
+            Sep::Plus => "+",
+            Sep::Underscore => "_",
+            Sep::Tilde => "~",
+            Sep::PlusTilde => "+~",
+            Sep::PlusPlus => "++",
         };
         write!(f, "{}", c)
     }

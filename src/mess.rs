@@ -131,6 +131,8 @@ impl Mess {
 
     fn sep(i: &str) -> IResult<&str, Sep> {
         alt((
+            value(Sep::PlusPlus, tag("++")),
+            value(Sep::PlusTilde, tag("+~")),
             value(Sep::Colon, char(':')),
             value(Sep::Hyphen, char('-')),
             value(Sep::Plus, char('+')),
@@ -309,16 +311,22 @@ pub enum Sep {
     Underscore,
     /// `~`
     Tilde,
+    /// `+~`
+    PlusTilde,
+    /// `++`
+    PlusPlus,
 }
 
 impl std::fmt::Display for Sep {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let c = match self {
-            Sep::Colon => ':',
-            Sep::Hyphen => '-',
-            Sep::Plus => '+',
-            Sep::Underscore => '_',
-            Sep::Tilde => '~',
+            Sep::Colon => ":",
+            Sep::Hyphen => "-",
+            Sep::Plus => "+",
+            Sep::Underscore => "_",
+            Sep::Tilde => "~",
+            Sep::PlusTilde => "+~",
+            Sep::PlusPlus => "++",
         };
         write!(f, "{}", c)
     }

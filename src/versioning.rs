@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 
 use crate::{Error, Mess, SemVer, Version};
 use nom::IResult;
-use nom::combinator::map;
+use nom::combinator::{all_consuming, map};
 use nom::{Parser, branch::alt};
 use std::str::FromStr;
 
@@ -57,9 +57,9 @@ impl Versioning {
     /// combination with other general `nom` parsers.
     pub fn parse(i: &str) -> IResult<&str, Versioning> {
         alt((
-            map(SemVer::parse, Versioning::Ideal),
-            map(Version::parse, Versioning::General),
-            map(Mess::parse, Versioning::Complex),
+            map(all_consuming(SemVer::parse), Versioning::Ideal),
+            map(all_consuming(Version::parse), Versioning::General),
+            map(all_consuming(Mess::parse), Versioning::Complex),
         ))
         .parse(i)
     }

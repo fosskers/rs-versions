@@ -702,6 +702,72 @@ mod tests {
         assert!(bad.is_complex());
     }
 
+    // https://github.com/fosskers/rs-versions/issues/33
+    //
+    // A version with more parts than a `SemVer` (here a four-part Windows-style
+    // version) parses fine on its own, but used to fail inside a `Requirement`.
+    // `Requirement::parse` delegates its version tail to `Versioning::parse`,
+    // which greedily accepted the three-part SemVer prefix `10.1.22000` and left
+    // `.832` behind, so `Requirement::new`'s full-consumption check failed.
+    #[test]
+    fn versions_33() {
+        let version = Versioning::new("10.1.22000.832").unwrap();
+        assert!(version.is_general());
+
+        // Each of these requirements must now actually parse.
+        for r in [
+            "<10.1.22000",
+            ">10.1.22000",
+            "<10.1.22000.832",
+            ">10.1.22000.832",
+        ] {
+            assert!(
+                Requirement::new(r).is_some(),
+                "requirement failed to parse: {r}"
+            );
+        }
+
+        // And the comparisons they enable should be sane.
+        assert!(!Requirement::new("<10.1.22000").unwrap().matches(&version));
+        assert!(Requirement::new(">10.1.22000").unwrap().matches(&version));
+        // The version is neither strictly less nor greater than itself.
+        assert!(
+            !Requirement::new("<10.1.22000.832")
+                .unwrap()
+                .matches(&version)
+        );
+        assert!(
+            !Requirement::new(">10.1.22000.832")
+                .unwrap()
+                .matches(&version)
+        );
+        assert!(
+            Requirement::new(">=10.1.22000.832")
+                .unwrap()
+                .matches(&version)
+        );
+    }
+
+    // NodeJS / Debian-style versions that use `++` and `+~` as separators. These
+    // are too irregular to be a `SemVer` or `Version`, so they land as a `Mess`,
+    // and must round-trip losslessly through `Display`.
+    #[test]
+    fn nodejs_messes() {
+        for s in [
+            "6.0.1+~3.0.4+~2.0.0+~1.0.0+~2.0.1-1",
+            "0.7.0++dfsg2+really.0.6.1-15",
+        ] {
+            let v = Versioning::new(s).unwrap_or_else(|| panic!("failed to parse: {s}"));
+            assert!(v.is_complex(), "{s} should be complex, got {v:?}");
+            assert_eq!(s, v.to_string(), "round-trip failed for {s}");
+        }
+
+        // Ordering still works across these messes.
+        let a = Versioning::new("6.0.1+~3.0.4+~2.0.0+~1.0.0+~2.0.1-1").unwrap();
+        let b = Versioning::new("6.0.2+~3.0.4+~2.0.0+~1.0.0+~2.0.1-1").unwrap();
+        assert!(a < b);
+    }
+
     // https://github.com/fosskers/aura/issues/876
     #[test]
     fn aura_876() {

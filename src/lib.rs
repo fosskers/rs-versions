@@ -594,7 +594,7 @@ mod tests {
 
     #[test]
     fn bad_semvers() {
-        let bads = vec![
+        let bads = [
             "1",
             "1.2",
             "a.b.c",
@@ -610,7 +610,7 @@ mod tests {
     #[test]
     /// The exact example from http://semver.org
     fn semver_ord() {
-        let svs = vec![
+        let svs = [
             "1.0.0-alpha",
             "1.0.0-alpha.1",
             "1.0.0-alpha.beta",
@@ -659,14 +659,14 @@ mod tests {
 
     #[test]
     fn bad_versions() {
-        let bads = vec!["", "1.2 "];
+        let bads = ["", "1.2 "];
 
         bads.iter().for_each(|b| assert_eq!(None, Version::new(b)));
     }
 
     #[test]
     fn version_ord() {
-        let vs = vec!["0.9.9.9", "1.0.0.0", "1.0.0.1", "2"];
+        let vs = ["0.9.9.9", "1.0.0.0", "1.0.0.1", "2"];
 
         for (a, b) in vs.iter().zip(&vs[1..]) {
             cmp_versions(a, b);
@@ -748,14 +748,14 @@ mod tests {
 
     #[test]
     fn bad_messes() {
-        let bads = vec!["", "003.03-3 "];
+        let bads = ["", "003.03-3 "];
 
         bads.iter().for_each(|b| assert_eq!(None, Mess::new(b)));
     }
 
     #[test]
     fn mess_ord() {
-        let messes = vec![
+        let messes = [
             "10.2+0.93+1-1",
             "10.2+0.93+1-2",
             "10.2+0.93+2-1",
@@ -846,31 +846,21 @@ mod tests {
 
     #[test]
     fn test_eq() {
-        assert!(
-            Requirement::from_str("=1.0.0")
-                .unwrap()
-                .matches(&Versioning::new("1.0.0").unwrap())
-        );
-        assert!(
-            Requirement::from_str("=1.1.0")
-                .unwrap()
-                .matches(&Versioning::new("1.1.0").unwrap())
-        );
-        assert!(
-            Requirement::from_str("=0.9.0")
-                .unwrap()
-                .matches(&Versioning::new("0.9.0").unwrap())
-        );
-        assert!(
-            Requirement::from_str("=6.0.pre134")
-                .unwrap()
-                .matches(&Versioning::new("6.0.pre134").unwrap())
-        );
-        assert!(
-            Requirement::from_str("=6.0.166")
-                .unwrap()
-                .matches(&Versioning::new("6.0.166").unwrap())
-        );
+        assert!(Requirement::from_str("=1.0.0")
+            .unwrap()
+            .matches(&Versioning::new("1.0.0").unwrap()));
+        assert!(Requirement::from_str("=1.1.0")
+            .unwrap()
+            .matches(&Versioning::new("1.1.0").unwrap()));
+        assert!(Requirement::from_str("=0.9.0")
+            .unwrap()
+            .matches(&Versioning::new("0.9.0").unwrap()));
+        assert!(Requirement::from_str("=6.0.pre134")
+            .unwrap()
+            .matches(&Versioning::new("6.0.pre134").unwrap()));
+        assert!(Requirement::from_str("=6.0.166")
+            .unwrap()
+            .matches(&Versioning::new("6.0.166").unwrap()));
     }
 
     #[test]

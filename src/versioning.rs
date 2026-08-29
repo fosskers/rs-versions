@@ -3,13 +3,13 @@
 use std::cmp::Ordering;
 
 use crate::{Error, Mess, SemVer, Version};
-use nom::IResult;
 use nom::combinator::map;
-use nom::{Parser, branch::alt};
+use nom::IResult;
+use nom::{branch::alt, Parser};
 use std::str::FromStr;
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
 /// A top-level Versioning type which acts as a wrapper for the more specific
 /// types.
@@ -160,7 +160,7 @@ impl Versioning {
         let s: String = Deserialize::deserialize(deserializer)?;
 
         Versioning::new(&s)
-            .ok_or_else(|| Error::IllegalVersioning(s))
+            .ok_or(Error::IllegalVersioning(s))
             .map_err(D::Error::custom)
     }
 }

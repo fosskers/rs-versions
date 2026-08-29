@@ -39,7 +39,6 @@ use serde::{Deserialize, Serialize};
 ///     assert!(Version::new(v).is_some());
 /// }
 /// ```
-
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Version {

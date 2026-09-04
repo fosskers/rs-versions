@@ -124,6 +124,7 @@ impl Version {
             let chunks = cs.0.iter().map(|c| c.mchunk()).collect();
             (Sep::Hyphen, Box::new(Mess { chunks, next: None }))
         });
+
         Mess { chunks, next }
     }
 
@@ -273,7 +274,10 @@ impl Ord for Version {
         let be = other.epoch.unwrap_or(0);
         match ae.cmp(&be) {
             Equal => match self.chunks.cmp(&other.chunks) {
-                Equal => self.release.cmp(&other.release),
+                Equal => match self.last.cmp(&other.last) {
+                    Equal => self.release.cmp(&other.release),
+                    ord => ord,
+                },
                 ord => ord,
             },
             ord => ord,
@@ -352,6 +356,58 @@ impl Last {
             l @ Last::Rc(_, _, _) => MChunk::Plain(l.to_string()),
             l @ Last::Post(_, _) => MChunk::Plain(l.to_string()),
             Last::Alphanum(s) => MChunk::Plain(s.clone()),
+        }
+    }
+}
+
+impl PartialOrd for Last {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Last {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Last::Numeric(a), Last::Numeric(b)) => a.cmp(b),
+            (Last::Numeric(a), Last::Rc(b, _, _)) => a.cmp(b),
+            (Last::Numeric(a), Last::Post(b, _)) => a.cmp(b),
+            // ARBITRARY: If the right side is garbage, the nice number is
+            // always considered greater.
+            (Last::Numeric(_), Last::Alphanum(_)) => Greater,
+            (Last::Rc(a, s, b), Last::Rc(x, t, y)) => match a.cmp(x) {
+                Equal => match s.cmp(t) {
+                    Equal => b.cmp(y),
+                    ord => ord,
+                },
+                ord => ord,
+            },
+            (Last::Rc(a, _, _), Last::Numeric(b)) => a.cmp(b),
+            (Last::Rc(a, s, _), Last::Post(b, t)) => match a.cmp(b) {
+                // NOTE: 2026-09-05 Perhaps weak.
+                Equal => s.cmp(t),
+                ord => ord,
+            },
+            // ARBITRARY
+            (Last::Rc(_, _, _), Last::Alphanum(_)) => Greater,
+            (Last::Post(a, _), Last::Numeric(b)) => a.cmp(b),
+            (Last::Post(a, s), Last::Rc(b, t, _)) => match a.cmp(b) {
+                Equal => s.cmp(t),
+                ord => ord,
+            },
+            (Last::Post(a, s), Last::Post(b, t)) => match a.cmp(b) {
+                Equal => s.cmp(t),
+                ord => ord,
+            },
+            // ARBITRARY
+            (Last::Post(_, _), Last::Alphanum(_)) => Greater,
+            // ARBITRARY
+            (Last::Alphanum(_), Last::Numeric(_)) => Less,
+            // ARBITRARY
+            (Last::Alphanum(_), Last::Rc(_, _, _)) => Less,
+            // ARBITRARY
+            (Last::Alphanum(_), Last::Post(_, _)) => Less,
+            (Last::Alphanum(a), Last::Alphanum(b)) => a.cmp(b),
         }
     }
 }

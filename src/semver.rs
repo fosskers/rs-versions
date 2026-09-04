@@ -1,5 +1,6 @@
 //! Types and logic for handling ideal [`SemVer`]s.
 
+use crate::version::Last;
 use crate::{Chunk, Chunks, Error, MChunk, Mess, Release, Sep, Version};
 use nom::character::complete::char;
 use nom::combinator::opt;
@@ -78,15 +79,12 @@ impl SemVer {
     /// assert_eq!("1.2.3-r1+git123", format!("{}", ver));
     /// ```
     pub fn to_version(&self) -> Version {
-        let chunks = Chunks(vec![
-            Chunk::Numeric(self.major),
-            Chunk::Numeric(self.minor),
-            Chunk::Numeric(self.patch),
-        ]);
+        let chunks = Chunks(vec![Chunk::Numeric(self.major), Chunk::Numeric(self.minor)]);
 
         Version {
             epoch: None,
             chunks,
+            last: Last::Numeric(self.patch),
             meta: self.meta.clone(),
             release: self.pre_rel.clone(),
         }

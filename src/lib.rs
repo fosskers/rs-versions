@@ -80,7 +80,7 @@ mod versioning;
 pub use mess::{MChunk, Mess, Sep};
 pub use require::{Op, Requirement};
 pub use semver::SemVer;
-pub use version::Version;
+pub use version::{Last, Version};
 pub use versioning::Versioning;
 
 use itertools::EitherOrBoth::{Both, Left, Right};
@@ -272,7 +272,7 @@ impl std::fmt::Display for Chunks {
 pub enum Chunk {
     /// A nice, pure number.
     Numeric(u32),
-    /// A mixture of letters, numbers, and hyphens.
+    /// Any other mixture of letters, numbers, and hyphens.
     Alphanum(String),
 }
 
@@ -287,9 +287,6 @@ impl Chunk {
     /// assert_eq!(Some(1), v.single_digit());
     ///
     /// let v = Chunk::Alphanum("abc".to_string());
-    /// assert_eq!(None, v.single_digit());
-    ///
-    /// let v = Chunk::Alphanum("1abc".to_string());
     /// assert_eq!(None, v.single_digit());
     /// ```
     pub fn single_digit(&self) -> Option<u32> {
@@ -335,6 +332,10 @@ impl Chunk {
             Chunk::Alphanum(s) => {
                 // FIXME 2024-08-05 `strip_prefix` may be too aggressive. Should
                 // we only strip one char instead?
+                //
+                // 2026-08-30 This whole branch is potentially dangerous anyway.
+                // We can't really assume that if this finds a number that that
+                // means anything significant at all.
                 s.strip_prefix(|c: char| c.is_ascii_alphabetic())
                     .and_then(|stripped| unsigned(stripped).ok())
                     .map(|(_, n)| n)
@@ -377,6 +378,7 @@ impl Chunk {
         map(unsigned, Chunk::Numeric).parse(i)
     }
 
+    /// Simple conversion to the messier [`MChunk`] type.
     fn mchunk(&self) -> MChunk {
         // FIXME Fri Jan  7 12:34:24 2022
         //
@@ -388,17 +390,20 @@ impl Chunk {
             Chunk::Numeric(n) => MChunk::Digits(*n, n.to_string()),
             Chunk::Alphanum(s) => MChunk::Plain(s.clone()),
         }
-        // match self.0.as_slice() {
-        //     [] => None,
-        //     [Unit::Digits(u)] => Some(MChunk::Digits(*u, u.to_string())),
-        //     [Unit::Letters(s), Unit::Digits(u)] if s == "r" => {
-        //         Some(MChunk::Rev(*u, format!("r{}", u)))
-        //     }
-        //     [Unit::Letters(s)] => Some(MChunk::Plain(s.clone())),
-        //     _ => Some(MChunk::Plain(format!("{}", self))),
-        // }
     }
 
+    /// This is only used within the `Ord` impl for `Release`, which itself is
+    /// specific to [`SemVer`]. From the SemVer spec:
+    ///
+    /// > Precedence for two pre-release versions with the same major, minor, and
+    /// > patch version MUST be determined by comparing each dot separated
+    /// > identifier from left to right until a difference is found as follows:
+    /// >
+    /// > 1. Identifiers consisting of only digits are compared numerically.
+    /// > 2. Identifiers with letters or hyphens are compared lexically in ASCII sort order.
+    /// > 3. Numeric identifiers always have lower precedence than non-numeric identifiers.
+    /// > 4. A larger set of pre-release fields has a higher precedence than a
+    /// >    smaller set, if all of the preceding identifiers are equal.
     fn cmp_semver(&self, other: &Self) -> Ordering {
         match (self, other) {
             (Chunk::Numeric(a), Chunk::Numeric(b)) => a.cmp(b),
@@ -631,7 +636,7 @@ mod tests {
 
     #[test]
     fn good_versions() {
-        let goods = vec![
+        let goods = [
             "1",
             "1.2",
             "1.0rc0",
@@ -674,6 +679,7 @@ mod tests {
 
         cmp_versions("1.2-5", "1.2.3-1");
         cmp_versions("1.0rc1", "1.0");
+        cmp_versions("1.0rc1", "1.0rc2");
         cmp_versions("1.0", "1:1.0");
         cmp_versions("1.1", "1:1.0");
         cmp_versions("1.1", "1:1.1");
@@ -700,6 +706,15 @@ mod tests {
     fn versions_29() {
         let bad = Versioning::new("0.0.0-0.1730239248325").unwrap();
         assert!(bad.is_complex());
+    }
+
+    // https://github.com/fosskers/rs-versions/issues/39
+    #[test]
+    fn versions_39_tmux() {
+        let v = Version::new("1.2.3rc1").unwrap();
+        eprintln!("{v:?}");
+
+        cmp_versions("3.7b", "3.7c");
     }
 
     // https://github.com/fosskers/aura/issues/876

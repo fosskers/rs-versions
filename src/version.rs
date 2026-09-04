@@ -1,8 +1,11 @@
 //! Types and logic for handling general [`Version`]s.
 
+use crate::parsers::unsigned;
 use crate::{Chunk, Chunks, Error, MChunk, Mess, Release, Sep};
+use nom::branch::alt;
+use nom::bytes::complete::take_while1;
 use nom::character::complete::char;
-use nom::combinator::opt;
+use nom::combinator::{eof, fail, opt};
 use nom::{IResult, Parser};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
@@ -48,6 +51,9 @@ pub struct Version {
     /// The main sections of the `Version`. Unlike [`crate::SemVer`], these
     /// sections are allowed to contain letters.
     pub chunks: Chunks,
+    /// The last [`Chunk`], but parsed with extra rules to account for patterns
+    /// like `3.7b` and `1.2.3rc2` for more accurate comparison.
+    pub last: Last,
     /// This either indicates a prerelease like [`crate::SemVer`], or a
     /// "release" revision for software packages. In the latter case, a version
     /// like `1.2.3-2` implies that the software itself hasn't changed, but that
@@ -171,18 +177,28 @@ impl Version {
     /// combination with other general `nom` parsers.
     pub fn parse(i: &str) -> IResult<&str, Version> {
         let (i, epoch) = opt(Version::epoch).parse(i)?;
-        let (i, chunks) = Chunks::parse(i)?;
+        let (i, mut chunks) = Chunks::parse(i)?;
         let (i, release) = opt(Release::parse).parse(i)?;
         let (i, meta) = opt(crate::parsers::meta).parse(i)?;
 
-        let v = Version {
-            epoch,
-            chunks,
-            meta,
-            release,
-        };
+        match chunks.0.pop() {
+            // NOTE: 2026-09-01 This `None` branch should never trigger since
+            // the parsers above would have succeeded by this point and so
+            // `chunks` should always contain something. Even so, I'm not
+            // willing to call `unwrap` ;)
+            None => fail().parse(i),
+            Some(last) => {
+                let v = Version {
+                    epoch,
+                    chunks,
+                    last: Last::from(last),
+                    meta,
+                    release,
+                };
 
-        Ok((i, v))
+                Ok((i, v))
+            }
+        }
     }
 
     fn epoch(i: &str) -> IResult<&str, u32> {
@@ -305,4 +321,74 @@ impl TryFrom<&str> for Version {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Version::from_str(value)
     }
+}
+
+/// The final component of the main pieces of a [`Version`]. Often has
+/// additional tag-like metadata appended to a number to indicate release
+/// information, like `1.2.3rc1`.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum Last {
+    /// A nice, pure number.
+    Numeric(u32),
+    /// A special case of `Alphanum` which structurally represents the "RC
+    /// pattern", or chunks like the last member of `1.2.3rc2`.
+    Rc(u32, String, u32),
+    /// Similar to `Rc`, but for numbers appended with a letter.
+    ///
+    /// - Tmux: `3.7b`
+    Post(u32, String),
+    /// Any other free mixture of letters and numbers.
+    Alphanum(String),
+}
+
+impl Default for Last {
+    fn default() -> Self {
+        Last::Numeric(0)
+    }
+}
+
+impl From<Chunk> for Last {
+    /// ```
+    /// use versions::Chunk;
+    /// use versions::Last;
+    ///
+    /// let c = Chunk::Alphanum("1rc2".to_string());
+    /// let l = Last::from(c);
+    /// assert_eq!(l, Last::Rc(1, "rc".to_string(), 2));
+    ///
+    /// let c = Chunk::Alphanum("7b".to_string());
+    /// let l = Last::from(c);
+    /// assert_eq!(l, Last::Post(7, "b".to_string()));
+    /// ```
+    fn from(chunk: Chunk) -> Self {
+        match chunk {
+            Chunk::Numeric(n) => Last::Numeric(n),
+            Chunk::Alphanum(s) => match last(&s) {
+                Ok((_, l)) => l,
+                Err(_) => Last::Alphanum(s),
+            },
+        }
+    }
+}
+
+fn last(i: &str) -> IResult<&str, Last> {
+    alt((rc, post)).parse(i)
+}
+
+fn rc(i: &str) -> IResult<&str, Last> {
+    let (i, a) = unsigned(i)?;
+    let (i, s) = take_while1(|c: char| c.is_ascii_alphabetic()).parse(i)?;
+    let (i, b) = unsigned(i)?;
+    let (_, _) = eof(i)?;
+
+    Ok(("", Last::Rc(a, s.to_string(), b)))
+}
+
+fn post(i: &str) -> IResult<&str, Last> {
+    let (i, u) = unsigned(i)?;
+    let (i, s) = take_while1(|c: char| c.is_ascii_alphabetic()).parse(i)?;
+    let (_, _) = eof(i)?;
+
+    Ok(("", Last::Post(u, s.to_string())))
 }

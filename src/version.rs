@@ -118,7 +118,8 @@ impl Version {
 
     /// Convert to a `Mess` without considering the epoch.
     fn to_mess_continued(&self) -> Mess {
-        let chunks = self.chunks.0.iter().map(|c| c.mchunk()).collect();
+        let mut chunks: Vec<_> = self.chunks.0.iter().map(|c| c.mchunk()).collect();
+        chunks.push(self.last.mchunk());
         let next = self.release.as_ref().map(|cs| {
             let chunks = cs.0.iter().map(|c| c.mchunk()).collect();
             (Sep::Hyphen, Box::new(Mess { chunks, next: None }))
@@ -287,6 +288,7 @@ impl std::fmt::Display for Version {
         }
 
         write!(f, "{}", self.chunks)?;
+        write!(f, ".{}", self.last)?;
 
         if let Some(r) = &self.release {
             write!(f, "-{}", r)?;
@@ -342,9 +344,32 @@ pub enum Last {
     Alphanum(String),
 }
 
+impl Last {
+    fn mchunk(&self) -> MChunk {
+        // NOTE 2026-09-05 Unfortunate allocations here.
+        match self {
+            Last::Numeric(n) => MChunk::Digits(*n, n.to_string()),
+            l @ Last::Rc(_, _, _) => MChunk::Plain(l.to_string()),
+            l @ Last::Post(_, _) => MChunk::Plain(l.to_string()),
+            Last::Alphanum(s) => MChunk::Plain(s.clone()),
+        }
+    }
+}
+
 impl Default for Last {
     fn default() -> Self {
         Last::Numeric(0)
+    }
+}
+
+impl std::fmt::Display for Last {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Last::Numeric(n) => write!(f, "{n}"),
+            Last::Rc(a, s, b) => write!(f, "{a}{s}{b}"),
+            Last::Post(n, s) => write!(f, "{n}{s}"),
+            Last::Alphanum(s) => write!(f, "{s}"),
+        }
     }
 }
 

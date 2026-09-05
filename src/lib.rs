@@ -711,9 +711,6 @@ mod tests {
     // https://github.com/fosskers/rs-versions/issues/39
     #[test]
     fn versions_39_tmux() {
-        let v = Version::new("1.2.3rc1").unwrap();
-        eprintln!("{v:?}");
-
         cmp_versions("3.7b", "3.7c");
     }
 

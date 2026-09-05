@@ -520,6 +520,7 @@ fn last(i: &str) -> IResult<&str, Last> {
     alt((rc, post)).parse(i)
 }
 
+/// Strictly follows the pattern of DIGITS-LETTERS-DIGITS.
 fn rc(i: &str) -> IResult<&str, Last> {
     let (i, a) = unsigned(i)?;
     let (i, s) = take_while1(|c: char| c.is_ascii_alphabetic()).parse(i)?;

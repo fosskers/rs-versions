@@ -1,5 +1,21 @@
 # `versions` Changelog
 
+## 8.0.0 (2026-09-05)
+
+#### Added
+
+- The `Last` type.
+- `Version` now last an explicit `last: Last` field to improve comparison
+  behaviour for versions like `1.2.3rc2` and `7.3b`.
+
+#### Fixed
+
+- Tmux-style versions like `7.3.b` compare correctly again.
+
+#### Removed
+
+- `Version::nth_lenient`: Just use `Version::nth` while being aware of `Last`.
+
 ## 7.0.0 (2025-02-24)
 
 #### Changed

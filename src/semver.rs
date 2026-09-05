@@ -130,11 +130,11 @@ impl SemVer {
         // any `SemVer`.
         match other.epoch {
             Some(n) if n > 0 => Less,
-            _ => match other.nth_lenient(0).map(|x| self.major.cmp(&x)) {
+            _ => match other.nth(0).map(|x| self.major.cmp(&x)) {
                 None => Greater,
                 Some(Greater) => Greater,
                 Some(Less) => Less,
-                Some(Equal) => match other.nth_lenient(1).map(|x| self.minor.cmp(&x)) {
+                Some(Equal) => match other.nth(1).map(|x| self.minor.cmp(&x)) {
                     None => Greater,
                     Some(Greater) => Greater,
                     Some(Less) => Less,
@@ -144,7 +144,7 @@ impl SemVer {
                         Last::Post(n, _) => self.patch.cmp(&n),
                         Last::Alphanum(_) => Greater,
                     },
-                    Some(Equal) => match other.nth_lenient(2).map(|x| self.patch.cmp(&x)) {
+                    Some(Equal) => match other.nth(2).map(|x| self.patch.cmp(&x)) {
                         None => Greater,
                         Some(Greater) => Greater,
                         Some(Less) => Less,

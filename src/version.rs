@@ -87,11 +87,6 @@ impl Version {
     /// assert_eq!(Some(4), mess.nth(2));
     /// ```
     pub fn nth(&self, n: usize) -> Option<u32> {
-        self.chunks.0.get(n).and_then(Chunk::single_digit)
-    }
-
-    /// Like `nth`, but pulls a number even if it was followed by letters.
-    pub fn nth_lenient(&self, n: usize) -> Option<u32> {
         if n == self.chunks.0.len() {
             match self.last {
                 Last::Numeric(n) => Some(n),
@@ -100,7 +95,7 @@ impl Version {
                 Last::Alphanum(_) => None,
             }
         } else {
-            self.chunks.0.get(n).and_then(Chunk::single_digit_lenient)
+            self.chunks.0.get(n).and_then(Chunk::single_digit)
         }
     }
 

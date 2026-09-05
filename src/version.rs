@@ -128,6 +128,24 @@ impl Version {
         Mess { chunks, next }
     }
 
+    /// Just compares the main `Chunks` and `Last` portions. Epoch and Release
+    /// comparison is assumed to occur in the caller. See `Version::cmp`.
+    fn cmp_with_last(longer: &Version, shorter: &Version) -> Ordering {
+        let len_shorter = shorter.chunks.0.len();
+        let (main, rest) = longer.chunks.0.split_at(len_shorter);
+
+        // FIXME: 2026-09-05 Lazy cloning here.
+        match Chunks(main.to_vec()).cmp(&shorter.chunks) {
+            // FIXME: 2026-09-05 This indexing will panic if the `longer` isn't
+            // actually longer.
+            Equal => match Last::from(rest[0].clone()).cmp(&shorter.last) {
+                Equal => Greater,
+                ord => ord,
+            },
+            ord => ord,
+        }
+    }
+
     /// If we're lucky, we can pull specific numbers out of both inputs and
     /// accomplish the comparison without extra allocations.
     pub(crate) fn cmp_mess(&self, other: &Mess) -> Ordering {
@@ -273,13 +291,26 @@ impl Ord for Version {
         let ae = self.epoch.unwrap_or(0);
         let be = other.epoch.unwrap_or(0);
         match ae.cmp(&be) {
-            Equal => match self.chunks.cmp(&other.chunks) {
-                Equal => match self.last.cmp(&other.last) {
+            Equal => {
+                let len_self = self.chunks.0.len();
+                let len_othr = other.chunks.0.len();
+
+                let body_ord = if len_self == len_othr {
+                    match self.chunks.cmp(&other.chunks) {
+                        Equal => self.last.cmp(&other.last),
+                        ord => ord,
+                    }
+                } else if len_self > len_othr {
+                    Version::cmp_with_last(self, other)
+                } else {
+                    Version::cmp_with_last(other, self).reverse()
+                };
+
+                match body_ord {
                     Equal => self.release.cmp(&other.release),
                     ord => ord,
-                },
-                ord => ord,
-            },
+                }
+            }
             ord => ord,
         }
     }
@@ -292,7 +323,11 @@ impl std::fmt::Display for Version {
         }
 
         write!(f, "{}", self.chunks)?;
-        write!(f, ".{}", self.last)?;
+
+        match self.chunks.0.as_slice() {
+            [] => write!(f, "{}", self.last)?,
+            _ => write!(f, ".{}", self.last)?,
+        }
 
         if let Some(r) = &self.release {
             write!(f, "-{}", r)?;
@@ -367,11 +402,29 @@ impl PartialOrd for Last {
 }
 
 impl Ord for Last {
+    /// ```
+    /// use versions::Last;
+    ///
+    /// let a = Last::Rc(0, "rc".to_string(), 1);
+    /// let b = Last::Numeric(0);
+    /// assert!(a < b);
+    ///
+    /// let a = Last::Post(7, "alpha".to_string());
+    /// let b = Last::Numeric(7);
+    /// assert!(a < b);
+    /// ```
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
             (Last::Numeric(a), Last::Numeric(b)) => a.cmp(b),
-            (Last::Numeric(a), Last::Rc(b, _, _)) => a.cmp(b),
-            (Last::Numeric(a), Last::Post(b, _)) => a.cmp(b),
+            (Last::Numeric(a), Last::Rc(b, _, _)) => match a.cmp(b) {
+                // RCs are always less than the true release.
+                Equal => Greater,
+                ord => ord,
+            },
+            (Last::Numeric(a), Last::Post(b, _)) => match a.cmp(b) {
+                Equal => Greater,
+                ord => ord,
+            },
             // ARBITRARY: If the right side is garbage, the nice number is
             // always considered greater.
             (Last::Numeric(_), Last::Alphanum(_)) => Greater,
@@ -382,7 +435,10 @@ impl Ord for Last {
                 },
                 ord => ord,
             },
-            (Last::Rc(a, _, _), Last::Numeric(b)) => a.cmp(b),
+            (Last::Rc(a, _, _), Last::Numeric(b)) => match a.cmp(b) {
+                Equal => Less,
+                ord => ord,
+            },
             (Last::Rc(a, s, _), Last::Post(b, t)) => match a.cmp(b) {
                 // NOTE: 2026-09-05 Perhaps weak.
                 Equal => s.cmp(t),
@@ -390,7 +446,10 @@ impl Ord for Last {
             },
             // ARBITRARY
             (Last::Rc(_, _, _), Last::Alphanum(_)) => Greater,
-            (Last::Post(a, _), Last::Numeric(b)) => a.cmp(b),
+            (Last::Post(a, _), Last::Numeric(b)) => match a.cmp(b) {
+                Equal => Less,
+                ord => ord,
+            },
             (Last::Post(a, s), Last::Rc(b, t, _)) => match a.cmp(b) {
                 Equal => s.cmp(t),
                 ord => ord,

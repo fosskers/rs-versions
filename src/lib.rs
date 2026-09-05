@@ -732,8 +732,8 @@ mod tests {
         let x = Version::new(a).unwrap();
         let y = Version::new(b).unwrap();
 
-        assert!(x < y, "{} < {}", x, y);
-        assert!(y > x, "{} > {}", y, x);
+        assert!(x < y, "{} < {}\nLeft: {:?}\nRight: {:?}", x, y, x, y);
+        assert!(y > x, "{} > {}\nLeft: {:?}\nRight: {:?}", y, x, y, x);
     }
 
     #[test]

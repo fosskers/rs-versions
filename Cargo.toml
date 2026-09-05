@@ -13,7 +13,7 @@ categories = ["parser-implementations"]
 rust-version = "1.85.0"
 
 [dependencies]
-itertools = "0.14"
+itertools = "0.15"
 nom = "8.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 

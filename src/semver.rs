@@ -138,14 +138,30 @@ impl SemVer {
                     None => Greater,
                     Some(Greater) => Greater,
                     Some(Less) => Less,
+                    Some(Equal) if other.chunks.0.len() == 2 => match other.last {
+                        Last::Numeric(n) => self.patch.cmp(&n),
+                        Last::Rc(n, _, _) => self.patch.cmp(&n),
+                        Last::Post(n, _) => self.patch.cmp(&n),
+                        Last::Alphanum(_) => Greater,
+                    },
                     Some(Equal) => match other.nth_lenient(2).map(|x| self.patch.cmp(&x)) {
                         None => Greater,
                         Some(Greater) => Greater,
                         Some(Less) => Less,
+                        // The `Version` was one chunk longer than the `SemVer`,
+                        // so we check its `Last` explicitly. The logic follows
+                        // the pattern below of checking for the type of the
+                        // `Last`, rather than its inner value.
+                        Some(Equal) if other.chunks.0.len() == 3 => match other.last {
+                            Last::Numeric(_) => Less,
+                            Last::Rc(_, _, _) => Less,
+                            Last::Post(_, _) => Less,
+                            Last::Alphanum(_) => Greater,
+                        },
                         // By this point, the major/minor/patch positions have
-                        // all been equal. If there is a fourth position, its
-                        // type, not its value, will determine which overall
-                        // version is greater.
+                        // all been equal. If there is a fourth non-`Last`
+                        // position, its type, not its value, will determine
+                        // which overall version is greater.
                         Some(Equal) => match other.chunks.0.get(3) {
                             // 1.2.3 > 1.2.3.git
                             Some(Chunk::Alphanum(_)) => Greater,

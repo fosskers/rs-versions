@@ -92,7 +92,16 @@ impl Version {
 
     /// Like `nth`, but pulls a number even if it was followed by letters.
     pub fn nth_lenient(&self, n: usize) -> Option<u32> {
-        self.chunks.0.get(n).and_then(Chunk::single_digit_lenient)
+        if n == self.chunks.0.len() {
+            match self.last {
+                Last::Numeric(n) => Some(n),
+                Last::Rc(n, _, _) => Some(n),
+                Last::Post(n, _) => Some(n),
+                Last::Alphanum(_) => None,
+            }
+        } else {
+            self.chunks.0.get(n).and_then(Chunk::single_digit_lenient)
+        }
     }
 
     /// A lossless conversion from `Version` to [`Mess`].

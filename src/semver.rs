@@ -95,10 +95,10 @@ impl SemVer {
     /// ```
     /// use versions::SemVer;
     ///
-    /// let orig = "1.2.3-r1+git123";
-    /// let mess = SemVer::new(orig).unwrap().to_mess();
-    ///
-    /// assert_eq!(orig, format!("{}", mess));
+    /// for orig in ["1.2.3", "1.2.3-r1", "1.2.3-r1+git123", "17.0.20+101"] {
+    ///     let mess = SemVer::new(orig).unwrap().to_mess();
+    ///     assert_eq!(orig, format!("{}", mess));
+    /// }
     /// ```
     pub fn to_mess(&self) -> Mess {
         let chunks = vec![
@@ -106,15 +106,14 @@ impl SemVer {
             MChunk::Digits(self.minor, self.minor.to_string()),
             MChunk::Digits(self.patch, self.patch.to_string()),
         ];
-        let next = self.pre_rel.as_ref().map(|pr| {
-            let chunks = pr.0.iter().map(|c| c.mchunk()).collect();
-            let next = self.meta.as_ref().map(|meta| {
-                let chunks = vec![MChunk::Plain(meta.clone())];
-                (Sep::Plus, Box::new(Mess { chunks, next: None }))
-            });
-
-            (Sep::Hyphen, Box::new(Mess { chunks, next }))
+        let mut next = self.meta.as_ref().map(|meta| {
+            let chunks = vec![MChunk::Plain(meta.clone())];
+            (Sep::Plus, Box::new(Mess { chunks, next: None }))
         });
+        if let Some(pr) = &self.pre_rel {
+            let chunks = pr.0.iter().map(|c| c.mchunk()).collect();
+            next = Some((Sep::Hyphen, Box::new(Mess { chunks, next })));
+        }
 
         Mess { chunks, next }
     }

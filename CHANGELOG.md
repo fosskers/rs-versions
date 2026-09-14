@@ -1,6 +1,6 @@
 # `versions` Changelog
 
-## Unreleased
+## 8.0.1 (2026-09-14)
 
 #### Fixed
 

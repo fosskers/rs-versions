@@ -106,14 +106,31 @@ impl SemVer {
             MChunk::Digits(self.minor, self.minor.to_string()),
             MChunk::Digits(self.patch, self.patch.to_string()),
         ];
-        let mut next = self.meta.as_ref().map(|meta| {
-            let chunks = vec![MChunk::Plain(meta.clone())];
-            (Sep::Plus, Box::new(Mess { chunks, next: None }))
-        });
-        if let Some(pr) = &self.pre_rel {
-            let chunks = pr.0.iter().map(|c| c.mchunk()).collect();
-            next = Some((Sep::Hyphen, Box::new(Mess { chunks, next })));
-        }
+
+        let rel = self
+            .pre_rel
+            .as_ref()
+            .map(|pr| pr.0.iter().map(|c| c.mchunk()).collect());
+
+        let meta = self
+            .meta
+            .as_ref()
+            .map(|meta| vec![MChunk::Plain(meta.clone())]);
+
+        let next = match (rel, meta) {
+            (None, None) => None,
+            (None, Some(m)) => Some((Sep::Plus, Box::new(Mess::from_chunks(m)))),
+            (Some(r), None) => Some((Sep::Hyphen, Box::new(Mess::from_chunks(r)))),
+            (Some(r0), Some(m0)) => {
+                let m = (Sep::Plus, Box::new(Mess::from_chunks(m0)));
+                let r1 = Mess {
+                    chunks: r0,
+                    next: Some(m),
+                };
+
+                Some((Sep::Hyphen, Box::new(r1)))
+            }
+        };
 
         Mess { chunks, next }
     }
@@ -349,5 +366,19 @@ impl TryFrom<&str> for SemVer {
     /// ```
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         SemVer::from_str(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // https://github.com/fosskers/rs-versions/pull/41
+    #[test]
+    fn versions_41() {
+        let orig = "1.2.3+git123";
+        let mess = SemVer::new(orig).unwrap().to_mess();
+
+        assert_eq!(orig, format!("{}", mess));
     }
 }

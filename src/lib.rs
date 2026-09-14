@@ -466,9 +466,8 @@ impl std::fmt::Display for Chunk {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn chanks() {

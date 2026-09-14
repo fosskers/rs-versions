@@ -1,5 +1,11 @@
 # `versions` Changelog
 
+## Unreleased
+
+#### Fixed
+
+- Semver -> Mess conversion was dropping `+foo` metadata sections.
+
 ## 8.0.0 (2026-09-05)
 
 #### Added

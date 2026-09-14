@@ -73,6 +73,11 @@ impl Mess {
         }
     }
 
+    /// A shorthand for internal use.
+    pub(crate) fn from_chunks(chunks: Vec<MChunk>) -> Mess {
+        Mess { chunks, next: None }
+    }
+
     /// Try to extract a position from the `Mess` as a nice integer, as if it
     /// were a [`crate::SemVer`].
     ///
